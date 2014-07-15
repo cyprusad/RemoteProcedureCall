@@ -4,7 +4,8 @@
 #include <unistd.h>
 
 #include "rpc.h"
-#include "sck_stream.h" 
+#include "sck_stream.h"
+#include "message_protocol.h" 
 
 using namespace std;
 
@@ -16,7 +17,6 @@ class ServerProcess {
     char* BINDER_ADDRESS;
     char* BINDER_PORT;
     
-    // singleton instance
     static ServerProcess* singleton;
 
   protected:
@@ -38,6 +38,8 @@ class ServerProcess {
     int startServer(); 
 
     int connectToBinder();
+
+    int terminate(); // terminate server after verifying msf from binder
 };
 
 int ServerProcess::startServer() {
@@ -49,10 +51,15 @@ int ServerProcess::connectToBinder() {
   BINDER_ADDRESS = getenv("BINDER_ADDRESS");
   BINDER_PORT = getenv("BINDER_PORT");
   int s = call_sock(BINDER_ADDRESS, BINDER_PORT);
+
+  //send info about myself and all the methods that I have
+
 }
 
 int rpcInit() {
   // bind to the server 
+  ServerProcess::getInstance()->startServer(); // start server in background thread
+
 }
 
 int main() {

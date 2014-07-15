@@ -5,6 +5,7 @@
 
 #include "rpc.h"
 #include "sck_stream.h"
+#include "message_protocol.h"
 
 #define MAXDATASIZE 64 
 
