@@ -4,16 +4,8 @@
  * This is the binder process
  */
 
-#include <errno.h>       /* obligatory includes */
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-
 #include "rpc.h"
-#include "socket_stream.h" 
+#include "sck_stream.h" 
 
 #define PORTNUM 0
 //void fireman(void);

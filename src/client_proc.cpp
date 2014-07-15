@@ -1,11 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <string.h>
 
 #include "rpc.h"
-#include "socket_stream.h" 
+#include "sck_stream.h" 
 
 using namespace std;
 
