@@ -18,13 +18,36 @@
 
 using namespace std;
 
-int terminate(){
-  // terminate all the servers
+class BinderServer {
+  private:
+    int sockSelf; // socket that accepts connections from client and servers
+    char* selfAddress;
+    char* selfPort;
 
-  // terminate self - shut off the sockets and clean up memory used
-  return 0;
-}
+    static BinderServer* singleton;
 
+  protected:
+    BinderServer();
+
+  public:
+    static BinderServer* getInstance() {
+      if (singleton == 0) {
+        singleton = new BinderServer();
+      }
+      return singleton;
+    }
+
+    int startServer(); // start server and listen to server and client
+
+    int terminate(){
+      // terminate all the servers
+
+      // terminate self - shut off the sockets and clean up memory used
+      return 0;
+    }
+
+
+};
 
 
 int main() {
