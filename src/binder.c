@@ -61,6 +61,15 @@ int main() {
   sockfd = setup_server("0", 1);
   sockToClientfd = wait_for_conn(sockfd);
 
+  int a = 4;
+  int b = 5;
+
+  send(sockToClientfd, &a, sizeof(a), 0);
+  send(sockToClientfd, &b, sizeof(b), 0);
+
+  close(sockToClientfd);
+  close(sockfd);
+
   return 0;
 
 }
