@@ -12,8 +12,24 @@
 
 #define MAXHOSTNAME 1023
 #define PORTNUM 0
+#define BACKLOG 10     // how many pending connections queue will hold
 
 void fireman(void);
+
+void sigchld_handler(int s)
+{
+    while(waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+// get sockaddr, IPv4 or IPv6:
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
 
 // args: if binder calls this func => binderCaller = 1 else 0
 int establish(unsigned short portnum, int binder_caller) {
@@ -92,6 +108,120 @@ int get_connection(int s) {
   return t;
 }
 
+int setup_server(char port[], int binder_caller) {
+  int sockfd;  // listen on sock_fd, new connection on new_fd
+  struct addrinfo hints, *servinfo, *p;
+  struct sockaddr_storage their_addr; // connector's address information
+  struct sigaction sa;
+  int yes=1;
+  int rv;
+
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE; // use my IP
+
+  if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
+      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+      return 1;
+  }
+
+  // loop through all the results and bind to the first we can
+  for(p = servinfo; p != NULL; p = p->ai_next) {
+      if ((sockfd = socket(p->ai_family, p->ai_socktype,
+              p->ai_protocol)) == -1) {
+          perror("server: socket");
+          continue;
+      }
+
+      if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
+              sizeof(int)) == -1) {
+          perror("setsockopt");
+          exit(1);
+      }
+
+      if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+          close(sockfd);
+          perror("server: bind");
+          continue;
+      }
+
+      break;
+  }
+
+  if (p == NULL)  {
+      fprintf(stderr, "server: failed to bind\n");
+      return 2;
+  }
+
+  freeaddrinfo(servinfo); // all done with this structure
+
+  if (listen(sockfd, BACKLOG) == -1) {
+      perror("listen");
+      exit(1);
+  }
+
+  sa.sa_handler = sigchld_handler; // reap all dead processes
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+      perror("sigaction");
+      exit(1);
+  }
+
+  printf("server: waiting for connections...\n");
+
+  // If the binder made the call, then print the address and port info
+  char addr_str[INET6_ADDRSTRLEN];
+  struct sockaddr_in srv;
+  int addrlen = sizeof(srv);
+  if(binder_caller == 1) {
+    // inet_ntop(p->ai_family,
+    //     &(ipv4->sin_addr),
+    //     addr_str, sizeof addr_str);
+
+    //printf("BINDER_ADDRESS %s\n", p->ai_canonname);
+    //printf("BINDER_PORT    %hu\n", ipv4->sin_port);
+    
+    if (getsockname(sockfd, (struct sockaddr *)&srv, &addrlen) < 0) { 
+      printf("getsockname error\n" );
+    } else {
+      char alternate[1024];
+      inet_ntop(srv.sin_family, get_in_addr((struct sockaddr *) &srv.sin_addr), addr_str, sizeof(addr_str));
+      if (gethostname(alternate, 1024) == 0) {
+        printf("BINDER_ADDRESS %s\n", alternate);
+      }
+      
+      printf("BINDER_PORT    %hu\n", htons(srv.sin_port));
+    }
+  }
+
+  return sockfd;
+
+}
+
+
+int wait_for_conn(int sockfd) {
+    int sockToClientfd;  // listen on sock_fd, new connection on new_fd
+    struct addrinfo hints, *servinfo, *p;
+    struct sockaddr_storage their_addr; // connector's address information
+    socklen_t sin_size;
+    char s[INET6_ADDRSTRLEN];
+
+    sin_size = sizeof their_addr;
+    sockToClientfd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+    if (sockToClientfd == -1) {
+        perror("accept");
+    }
+
+    inet_ntop(their_addr.ss_family,
+        get_in_addr((struct sockaddr *)&their_addr),
+        s, sizeof s);
+    printf("server: got connection from %s\n", s);
+
+    return sockToClientfd;
+}
+
 // client
 int call_socket(char *hostname, unsigned short portnum)
 { struct sockaddr_in serv_addr;
@@ -126,6 +256,53 @@ int call_socket(char *hostname, unsigned short portnum)
   }
   return(s);
 }
+
+int call_sock(char hostname[], char port[]) {
+    int sockfd;
+    struct addrinfo hints, *servinfo, *p;
+    int rv;
+    char s[INET6_ADDRSTRLEN];
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        return 1;
+    }
+
+    // loop through all the results and connect to the first we can
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype,
+                p->ai_protocol)) == -1) {
+            perror("client: socket");
+            continue;
+        }
+
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(sockfd);
+            perror("client: connect");
+            continue;
+        }
+
+        break;
+    }
+
+    if (p == NULL) {
+        fprintf(stderr, "client: failed to connect\n");
+        return 2;
+    }
+
+    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
+            s, sizeof s);
+    printf("client: connecting to %s\n", s);
+
+    freeaddrinfo(servinfo); // all done with this structure
+
+    return sockfd;
+}
+
 
 int read_data(int s,     /* connected socket */
               char *buf, /* pointer to the buffer */
