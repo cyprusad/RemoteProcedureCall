@@ -4,6 +4,9 @@
  * This is the binder process
  */
 #include <errno.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "rpc.h"
 #include "sck_stream.h" 
@@ -13,6 +16,7 @@
 #define PORT "0"
 //void fireman(void);
 
+using namespace std;
 
 int terminate(){
   // terminate all the servers
