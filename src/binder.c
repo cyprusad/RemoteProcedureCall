@@ -3,6 +3,7 @@
  * 
  * This is the binder process
  */
+#include <errno.h>
 
 #include "rpc.h"
 #include "sck_stream.h" 
