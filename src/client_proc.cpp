@@ -21,14 +21,13 @@ int rpcCall(char * name, int * argTypes, void ** args) {
 
 int rpcTerminate() {
   //send the terminate message to the binder
+
+  //send_terminate(binderSockFd);
+
 }
 
 int main() {
-  int s;
-
-  char hostname[] = "Sai-Warangs-MacBook-Pro.local";
-
-  char port[] = "50331";
+  int binderSockFd;
 
   int a,b, numbytes;
   char buf[MAXDATASIZE];
@@ -38,17 +37,29 @@ int main() {
 
   printf("addr = %s \n port = %s \n ", BINDER_ADDRESS, BINDER_PORT);
 
-  s = call_sock(BINDER_ADDRESS, BINDER_PORT);
+  binderSockFd = call_sock(BINDER_ADDRESS, BINDER_PORT);
 
-  numbytes = recv(s, &a, sizeof(a), 0);
+  numbytes = recv(binderSockFd, &a, sizeof(a), 0);
   printf("read %d bytes\n", numbytes);
   printf("read a: %d \n", a);
 
-  numbytes = recv(s, &b, sizeof(b), 0);
+  numbytes = recv(binderSockFd, &b, sizeof(b), 0);
   printf("read %d bytes\n", numbytes);
   printf("read b: %d \n", b);
 
-  close(s);
+  // int head[2];
+  // head[0] = 0;
+  // head[1] = RPC_TERMINATE;
+  // int len = sizeof(head);
+
+  // send(binderSockFd, head, sizeof(head), 0);
+
+
+  // int bytesSent = send(binderSockFd, &head, len, 0);
+
+  send_terminate(binderSockFd);
+
+  close(binderSockFd);
 
 }
 

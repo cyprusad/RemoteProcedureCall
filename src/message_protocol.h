@@ -18,7 +18,7 @@ extern "C" {
 // terminate
 #define RPC_TERMINATE       8
 
-
+#define SIZE_HEAD           2
 
 #ifdef __cplusplus
 }

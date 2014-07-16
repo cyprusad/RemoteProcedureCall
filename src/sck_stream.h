@@ -14,6 +14,10 @@ extern int setup_server(char port[], int binder_caller);
 
 extern int wait_for_conn(int sockfd); 
 
+extern int read_message(int sockfd);
+
+extern int send_terminate(int sockfd);
+
 #ifdef __cplusplus
 }
 #endif

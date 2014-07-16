@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "message_protocol.h"
+
 #define MAXHOSTNAME 1023
 #define PORTNUM 0
 #define BACKLOG 10     // how many pending connections queue will hold
@@ -175,14 +177,7 @@ int setup_server(char port[], int binder_caller) {
   char addr_str[INET6_ADDRSTRLEN];
   struct sockaddr_in srv;
   int addrlen = sizeof(srv);
-  if(binder_caller == 1) {
-    // inet_ntop(p->ai_family,
-    //     &(ipv4->sin_addr),
-    //     addr_str, sizeof addr_str);
-
-    //printf("BINDER_ADDRESS %s\n", p->ai_canonname);
-    //printf("BINDER_PORT    %hu\n", ipv4->sin_port);
-    
+  if(binder_caller == 1) {    
     if (getsockname(sockfd, (struct sockaddr *)&srv, &addrlen) < 0) { 
       printf("getsockname error\n" );
     } else {
@@ -323,6 +318,28 @@ int call_sock(char hostname[], char port[]) {
 //   }
 //   return(bcount);
 // }
+
+int read_message(int sockfd) {
+  int size_head = 8;
+  int head[2];
+  int len, type;
+  int nbytes;
+
+  nbytes = recv(sockfd, head, sizeof(head), 0);
+  printf("read %d bytes\n", nbytes);
+  printf("read len: %d \nread type: %d \n", head[0], head[1]);
+
+  return 0;
+}
+
+int send_terminate(int sockfd) {
+  int head[2];
+  head[0] = 0;
+  head[1] = RPC_TERMINATE;
+
+  int bytesSent = send(sockfd, head, sizeof(head), 0);
+  return 0;
+}
 
 // int write_data(int s, char *buf, int n) {
 //   int bcount = 0;

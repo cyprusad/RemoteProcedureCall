@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include "rpc.h"
@@ -85,6 +86,19 @@ int main() {
   //   }
   // } 
 
+  // int argTypes[3];
+  // argTypes[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
+  // argTypes[1] = (1 << ARG_INPUT)  | (ARG_INT << 16) | 23;
+  // argTypes[2] = 0;
+
+  // printf("argTypes 0 - %d \n argTypes 1 - %d\n", argTypes[0], argTypes[1]);
+  // int head[2];
+  // head[0] = 0;
+  // head[1] = RPC_TERMINATE;
+  // int len = sizeof(head);
+
+  // printf("The size of head is %d\n", len); 
+
   int sockfd, sockToClientfd;
   sockfd = setup_server("0", 1);
   sockToClientfd = wait_for_conn(sockfd);
@@ -94,6 +108,8 @@ int main() {
 
   send(sockToClientfd, &a, sizeof(a), 0);
   send(sockToClientfd, &b, sizeof(b), 0);
+
+  read_message(sockToClientfd);
 
   close(sockToClientfd);
   close(sockfd);
