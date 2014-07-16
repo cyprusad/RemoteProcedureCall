@@ -13,14 +13,21 @@ ServerProcess* ServerProcess::singleton = NULL;
 
 class ServerProcess {
   private:
-    int sockServer, sockBinder;
+    int sockServerFd, sockBinderFd;
     char* BINDER_ADDRESS;
     char* BINDER_PORT;
     
     static ServerProcess* singleton;
 
   protected:
-    ServerProcess(); 
+    ServerProcess() {
+
+      // connect to the binder
+      BINDER_ADDRESS = getenv("BINDER_ADDRESS");
+      BINDER_PORT = getenv("BINDER_PORT");
+      sockBinderFd = call_sock(BINDER_ADDRESS, BINDER_PORT);
+
+    } 
   
   public: 
     //singleton accessor
@@ -32,39 +39,40 @@ class ServerProcess {
     }
 
     int getServerSockFd() {
-      return sockServer;
+      return sockServerFd;
+    }
+
+    int getBinderSockFd() {
+      return sockBinderFd;
     }
     
     int startServer(); 
 
-    int connectToBinder();
-
-    int terminate(); // terminate server after verifying msf from binder
+    int terminate(); // TODO terminate server after verifying msg from binder
 };
 
+// TODO start server in background thread ??
 int ServerProcess::startServer() {
-  sockServer = setup_server("0", 0); // server is calling so no need to print the addr/port
+  sockServer = setup_server("0", 0); 
   return sockServer; 
 }
 
-int ServerProcess::connectToBinder() {
-  BINDER_ADDRESS = getenv("BINDER_ADDRESS");
-  BINDER_PORT = getenv("BINDER_PORT");
-  int s = call_sock(BINDER_ADDRESS, BINDER_PORT);
-
-  //send info about myself and all the methods that I have
-
+int rpcInit() { 
+  ServerProcess::getInstance()->startServer();
+  // TODO find out who our hostname and port number to store in our internal db and send to binder 
 }
 
-int rpcInit() {
-  // bind to the server 
-  ServerProcess::getInstance()->startServer(); // start server in background thread
+int rpcRegister(char* name, int* argTypes, skeleton f);
+
+int rpcExecute() {
+  //TODO - some kind of infinite accept loop; 
+  //TODO - receive and process requests from client; 
+  //TODO - multithreaded?
+  int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
 
 }
 
 int main() {
-  //ServerProcess* server = ServerProcess::getInstance();
-  //ServerProcess* server = new ServerProcess();
   ServerProcess::getInstance()->startServer();
   int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
 
