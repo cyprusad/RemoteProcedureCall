@@ -10,13 +10,15 @@ extern int write_data(int socket, char* buf, int n);
 
 extern void fireman(void);
 
-extern int setup_server(char port[], int binder_caller);
+extern int setup_server(char port[]);
 
 extern int wait_for_conn(int sockfd); 
 
 extern int read_message(int sockfd);
 
 extern int send_terminate(int sockfd);
+
+extern int addrAndPort(int sockfd, char hostname[], unsigned short* port);
 
 #ifdef __cplusplus
 }

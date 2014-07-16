@@ -110,7 +110,7 @@ void *get_in_addr(struct sockaddr *sa)
 //   return t;
 // }
 
-int setup_server(char port[], int binder_caller) {
+int setup_server(char port[]) {
   int sockfd;  // listen on sock_fd, new connection on new_fd
   struct addrinfo hints, *servinfo, *p;
   struct sockaddr_storage their_addr; // connector's address information
@@ -173,26 +173,40 @@ int setup_server(char port[], int binder_caller) {
 
   printf("server: waiting for connections...\n");
 
-  // If the binder made the call, then print the address and port info
-  char addr_str[INET6_ADDRSTRLEN];
-  struct sockaddr_in srv;
-  int addrlen = sizeof(srv);
-  if(binder_caller == 1) {    
-    if (getsockname(sockfd, (struct sockaddr *)&srv, &addrlen) < 0) { 
-      printf("getsockname error\n" );
-    } else {
-      char alternate[1024];
-      inet_ntop(srv.sin_family, get_in_addr((struct sockaddr *) &srv.sin_addr), addr_str, sizeof(addr_str));
-      if (gethostname(alternate, 1024) == 0) {
-        printf("BINDER_ADDRESS %s\n", alternate);
-      }
+  // // If the binder made the call, then print the address and port info
+  // char addr_str[INET6_ADDRSTRLEN];
+  // struct sockaddr_in srv;
+  // int addrlen = sizeof(srv);
+  // if(binder_caller == 1) {    
+  //   if (getsockname(sockfd, (struct sockaddr *)&srv, &addrlen) < 0) { 
+  //     printf("getsockname error\n" );
+  //   } else {
+  //     char alternate[1024];
+  //     inet_ntop(srv.sin_family, get_in_addr((struct sockaddr *) &srv.sin_addr), addr_str, sizeof(addr_str));
+  //     if (gethostname(alternate, 1024) == 0) {
+  //       printf("BINDER_ADDRESS %s\n", alternate);
+  //     }
       
-      printf("BINDER_PORT    %hu\n", htons(srv.sin_port));
-    }
-  }
+  //     printf("BINDER_PORT    %hu\n", htons(srv.sin_port));
+  //   }
+  // }
 
   return sockfd;
 
+}
+
+int addrAndPort(int sockfd, char hostname[], unsigned short* port) {
+  struct sockaddr_in server;
+  int addrlen = sizeof(server);
+  if (getsockname(sockfd, (struct sockaddr *)&server, &addrlen) < 0) {
+    printf("getsockname error\n");
+  } else {
+    if (gethostname(hostname, 128) == 0) {
+      *port = htons(server.sin_port);
+      return 0;
+    }
+  }
+  return -1;
 }
 
 
@@ -319,6 +333,8 @@ int call_sock(char hostname[], char port[]) {
 //   return(bcount);
 // }
 
+
+// major work to be done here
 int read_message(int sockfd) {
   int size_head = 8;
   int head[2];
@@ -353,7 +369,7 @@ int send_execute_failure(int sockfd, int reasonCode) {
 
 int send_loc_success(int sockfd, char hostname[], int port) {
   // have a fixed size for hostname say something like 128 bytes (chars) and 4 bytes for port
-  
+
 }
 
 int send_loc_failure(int sockfd, int reasonCode) {

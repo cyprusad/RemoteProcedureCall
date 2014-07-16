@@ -12,6 +12,7 @@
 #include "rpc.h"
 #include "sck_stream.h"
 #include "message_protocol.h" 
+//#include "binder.h"
 
 #define PORTNUM 0
 
@@ -22,24 +23,38 @@ using namespace std;
 
 class BinderServer {
   private:
-    int sockSelf; // socket that accepts connections from client and servers
-    char* selfAddress;
-    char* selfPort;
+    int sockSelfFd; // socket that accepts connections from client and servers
+    
+    // who am i
+    char selfAddress[128];
+    unsigned short selfPort;
 
     static BinderServer* singleton;
 
   protected:
-    BinderServer();
+    //BinderServer();
 
   public:
     static BinderServer* getInstance() {
       if (singleton == 0) {
-        singleton = new BinderServer();
+        singleton = new BinderServer;
       }
       return singleton;
     }
 
-    int startServer(); // start server and listen to server and client
+    int startServer() {
+      sockSelfFd = setup_server("0");
+
+      unsigned short* portPtr = &selfPort;
+      if (addrAndPort(sockSelfFd, selfAddress, portPtr) == 0) {
+        printf("BINDER_ADDRESS %s\n", selfAddress);
+        printf("BINDER_PORT    %hu\n", selfPort);
+      } else {
+        printf("warning[0]: binder doesn't know its hostname/port; possible that binder didn't start properly");
+      }
+
+      return sockSelfFd; //TODO error checking here
+    }
 
     int terminate(){
       // terminate all the servers
@@ -51,6 +66,8 @@ class BinderServer {
 
 };
 
+
+BinderServer* BinderServer::singleton = NULL;
 
 int main() {
   // int s, t;
@@ -100,7 +117,9 @@ int main() {
   // printf("The size of head is %d\n", len); 
 
   int sockfd, sockToClientfd;
-  sockfd = setup_server("0", 1);
+  sockfd = BinderServer::getInstance()->startServer();
+
+
   sockToClientfd = wait_for_conn(sockfd);
 
   int a = 4;

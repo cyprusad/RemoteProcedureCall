@@ -9,20 +9,24 @@
 
 using namespace std;
 
-ServerProcess* ServerProcess::singleton = NULL;
-
 class ServerProcess {
   private:
     int sockServerFd, sockBinderFd;
+    
+    // to be used by the server to connect to the binder  
     char* BINDER_ADDRESS;
     char* BINDER_PORT;
+
+    // to be used by the clients to connect to the server
+    char SERVER_ADDRESS[128];
+    unsigned short SERVER_PORT;
     
     static ServerProcess* singleton;
 
   protected:
     ServerProcess() {
 
-      // connect to the binder
+      //connect to the binder NOTE binder needs to be running
       BINDER_ADDRESS = getenv("BINDER_ADDRESS");
       BINDER_PORT = getenv("BINDER_PORT");
       sockBinderFd = call_sock(BINDER_ADDRESS, BINDER_PORT);
@@ -51,10 +55,21 @@ class ServerProcess {
     int terminate(); // TODO terminate server after verifying msg from binder
 };
 
+ServerProcess* ServerProcess::singleton = NULL;
+
 // TODO start server in background thread ??
 int ServerProcess::startServer() {
-  sockServer = setup_server("0", 0); 
-  return sockServer; 
+  sockServerFd = setup_server("0"); 
+
+  unsigned short* portPtr = &SERVER_PORT;
+  if (addrAndPort(sockServerFd, SERVER_ADDRESS, portPtr) == 0) {
+    printf("SERVER_ADDRESS %s\n", SERVER_ADDRESS);
+    printf("SERVER_PORT    %hu\n", SERVER_PORT);
+  } else {
+    printf("I don't know who I am");
+  }
+
+  return sockServerFd; 
 }
 
 int rpcInit() { 
