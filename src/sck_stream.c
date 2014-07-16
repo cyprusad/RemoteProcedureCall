@@ -338,6 +338,31 @@ int send_terminate(int sockfd) {
   head[1] = RPC_TERMINATE;
 
   int bytesSent = send(sockfd, head, sizeof(head), 0);
+  return 0; //error checking required
+}
+
+int send_execute_failure(int sockfd, int reasonCode) {
+  int exec_failure[3];
+  exec_failure[0] = 4; //reasonCode is an int so 4 bytes
+  exec_failure[1] = RPC_EXECUTE_FAILURE;
+  exec_failure[2] = reasonCode;
+
+  int bytesSent = send(sockfd, exec_failure, &exec_failure, 0);
+  return 0;
+}
+
+int send_loc_success(int sockfd, char hostname[], int port) {
+  // have a fixed size for hostname say something like 128 bytes (chars) and 4 bytes for port
+  
+}
+
+int send_loc_failure(int sockfd, int reasonCode) {
+  int loc_failure[3];
+  loc_failure[0] = 4; //reasonCode is an int so 4 bytes
+  loc_failure[1] = RPC_LOC_FAILURE;
+  loc_failure[2] = reasonCode;
+
+  int bytesSent = send(sockfd, loc_failure, &loc_failure, 0);
   return 0;
 }
 

@@ -14,16 +14,56 @@ using namespace std;
 char* BINDER_ADDRESS;
 char* BINDER_PORT;
 
+class ClientProcess {
+  private:
+    static ClientProcess* singleton;
+    int binderSockFd;
+    char* BINDER_ADDRESS;
+    char* BINDER_PORT;
+  protected:
+    ClientProcess() { // called only once in the ctr
+      BINDER_ADDRESS = getenv("BINDER_ADDRESS");
+      BINDER_PORT = getenv("BINDER_PORT");
+
+
+      binderSockFd = call_sock(BINDER_ADDRESS, BINDER_PORT);
+    }
+  public:
+    static ClientProcess* getInstance() {
+      if(singleton == 0) {
+        singleton = new ClientProcess();
+      }
+      return singleton;
+    }
+
+    int getBinderSockFd(){
+      return binderSockFd;
+    }
+
+    int locationRequest(){
+      return 0;
+    }
+
+    int terminate() {
+      int res = send_terminate(binderSockFd);
+      return res;
+    }
+
+};
+
+ClientProcess* ClientProcess::singleton = NULL;
+
 int rpcCall(char * name, int * argTypes, void ** args) {
   // locate server for me
+
+
   // execute request to server
 }
 
 int rpcTerminate() {
   //send the terminate message to the binder
-
-  //send_terminate(binderSockFd);
-
+  int res = ClientProcess::getInstance()->terminate();
+  return res;
 }
 
 int main() {
@@ -57,7 +97,7 @@ int main() {
 
   // int bytesSent = send(binderSockFd, &head, len, 0);
 
-  send_terminate(binderSockFd);
+  //send_terminate(binderSockFd);
 
   close(binderSockFd);
 
