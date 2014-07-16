@@ -58,33 +58,92 @@ class ServerProcess {
       return res;
     } 
 
+    int read_message(int sockfd) {
+      int* head = read_head(sockfd); //TODO check if we need to clean this
+      int len = head[0];
+      int type = head[1];
+
+      switch(type) {
+        case RPC_TERMINATE:
+          // add to queue of messages to be processed (graceful termination)
+          terminate();
+          break;
+        case RPC_REGISTER_SUCCESS:
+          read_reg_succ(sockfd);
+          break;
+        case RPC_REGISTER_FAILURE:
+          read_reg_fail(sockfd);
+          break;
+        case RPC_EXECUTE:
+          read_execute(sockfd, len);
+          break:
+        default:
+          // invalid message type -- raise error of some sort
+          invalid_message(sockfd);
+      }
+    }
+
+    int read_reg_succ(int sockfd) {
+      int nbytes;
+      int warningFlag;
+
+      nbytes = recv(sockfd, &warningFlag, sizeof(int), 0);
+
+      printf("The warningFlag is: %d\n". warningFlag);
+      return 0;
+    }
+
+    int read_reg_fail(int sockfd) {
+      int nbytes;
+      int reasonCode;
+
+      nbytes = recv(sockfd, &reasonCode, sizeof(int), 0);
+
+      printf("The reasonCode is: %d\n". warningFlag);
+      return 0;
+    }
+
+    int read_execute(int sockfd, int len) {
+      
+      
+      return 0;
+    }
+
     int terminate(); // TODO terminate server after verifying msg from binder
+
+    int invalid_message(int sockfd) {
+      printf("Invalid message\n");
+      return 0; //or some warning
+    }
 };
 
 ServerProcess* ServerProcess::singleton = NULL;
 
 // TODO start server in background thread
 int ServerProcess::startServer() {
-  sockServerFd = setup_server("0"); //TODO infinite loop listening to client
-
+  sockServerFd = setup_server("0");
   unsigned short* portPtr = &SERVER_PORT;
+  
   if (addrAndPort(sockServerFd, SERVER_ADDRESS, portPtr) == 0) {
     printf("SERVER_ADDRESS %s\n", SERVER_ADDRESS);
     printf("SERVER_PORT    %hu\n", SERVER_PORT);
   } else {
-    printf("I don't know who I am");
+    printf("warning[0]: server doesn't know it's hostname, possible that it didn't start properly\n");
   }
 
-  return sockServerFd; 
+  return sockServerFd; //TODO check errors
 }
 
+//STATUS: Done
 int rpcInit() { 
   ServerProcess::getInstance()->startServer();
-  //TODO open connection to binder
 }
 
 int rpcRegister(char* name, int* argTypes, skeleton f) {
-  ServerProcess::getInstance()->registerWithBinder(name, argTypes);
+  ServerProcess::getInstance()->registerWithBinder(name, argTypes); 
+  //TODO check response and see if the registration failed
+  
+
   //store skeleton in local DB
 
   return 0;
