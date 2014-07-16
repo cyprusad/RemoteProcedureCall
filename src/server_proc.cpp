@@ -10,6 +10,7 @@
 using namespace std;
 
 class ServerProcess {
+  // server receives register_failure/success and execute
   private:
     int sockServerFd, sockBinderFd;
     
@@ -50,16 +51,21 @@ class ServerProcess {
       return sockBinderFd;
     }
     
-    int startServer(); 
+    int startServer();
+
+    int registerWithBinder(char* name, int* argTypes) {
+      int res = send_register(sockBinderFd, SERVER_ADDRESS, SERVER_PORT, name, argTypes);
+      return res;
+    } 
 
     int terminate(); // TODO terminate server after verifying msg from binder
 };
 
 ServerProcess* ServerProcess::singleton = NULL;
 
-// TODO start server in background thread ??
+// TODO start server in background thread
 int ServerProcess::startServer() {
-  sockServerFd = setup_server("0"); 
+  sockServerFd = setup_server("0"); //TODO infinite loop listening to client
 
   unsigned short* portPtr = &SERVER_PORT;
   if (addrAndPort(sockServerFd, SERVER_ADDRESS, portPtr) == 0) {
@@ -74,10 +80,15 @@ int ServerProcess::startServer() {
 
 int rpcInit() { 
   ServerProcess::getInstance()->startServer();
-  // TODO find out who our hostname and port number to store in our internal db and send to binder 
+  //TODO open connection to binder
 }
 
-int rpcRegister(char* name, int* argTypes, skeleton f);
+int rpcRegister(char* name, int* argTypes, skeleton f) {
+  ServerProcess::getInstance()->registerWithBinder(name, argTypes);
+  //store skeleton in local DB
+
+  return 0;
+}
 
 int rpcExecute() {
   //TODO - some kind of infinite accept loop; 

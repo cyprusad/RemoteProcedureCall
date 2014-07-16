@@ -334,16 +334,37 @@ int call_sock(char hostname[], char port[]) {
 // }
 
 
-// major work to be done here
-int read_message(int sockfd) {
-  int size_head = 8;
+// blocking - read head
+int* read_head(int sockfd) {
   int head[2];
-  int len, type;
   int nbytes;
 
   nbytes = recv(sockfd, head, sizeof(head), 0);
   printf("read %d bytes\n", nbytes);
   printf("read len: %d \nread type: %d \n", head[0], head[1]);
+
+  return head;
+}
+
+//TODO consider writing a send all that sends everything we want to send (7.3 in Beej)
+
+//blocking send calls (block till full message is sent)
+int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes) {
+  int len = 64 + sizeOfArgTypes*4; //funcName is is considered const size (max 64)
+  
+  int head[2];
+  head[0] = len;
+  head[1] = RPC_LOC_REQUEST;
+
+  printf("The funcname is: %s\nThe argType array len is: %d\n", funcName, sizeOfArgTypes);
+
+  int bytesSent;
+
+  bytesSent = send(sockfd, head, sizeof(head), 0);
+
+  bytesSent = send(sockfd, funcName, 64, 0);
+
+  bytesSent = send(sockfd, argTypes, sizeOfArgTypes, 0);
 
   return 0;
 }
@@ -363,7 +384,7 @@ int send_execute_failure(int sockfd, int reasonCode) {
   exec_failure[1] = RPC_EXECUTE_FAILURE;
   exec_failure[2] = reasonCode;
 
-  int bytesSent = send(sockfd, exec_failure, &exec_failure, 0);
+  int bytesSent = send(sockfd, exec_failure, sizeof(exec_failure), 0);
   return 0;
 }
 
@@ -378,8 +399,51 @@ int send_loc_failure(int sockfd, int reasonCode) {
   loc_failure[1] = RPC_LOC_FAILURE;
   loc_failure[2] = reasonCode;
 
-  int bytesSent = send(sockfd, loc_failure, &loc_failure, 0);
+  int bytesSent = send(sockfd, loc_failure, sizeof(loc_failure), 0);
   return 0;
+}
+
+int send_register(int sockfd, char server_identifier[], unsigned short port, char funcName[], int argTypes[], int sizeOfArgTypes) {
+  int len = 128 + 2 + 64 + sizeOfArgTypes*4;
+
+  int head[2];
+  head[0] = len;
+  head[1] = RPC_REGISTER;
+
+  printf("SEND: The server registered is: %s\nThe port of server is: %huThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, port, funcName, argTypes[0]);
+
+  int bytesSent;
+
+  bytesSent = send(sockfd, head, sizeof(head), 0);
+
+  bytesSent = send(sockfd, server_identifier, 128, 0);
+
+  bytesSent = send(sockfd, &port, 2, 0);
+
+  bytesSent = send(sockfd, funcName, 64, 0);
+
+  bytesSent = send(sockfd, argTypes, sizeOfArgTypes, 0);
+
+  return 0;
+
+}
+
+int send_register_success(int sockfd, int warningFlag) {
+  int reg_success[3];
+  reg_success[0] = 4; //warningFlag is an int so 4 bytes
+  reg_success[1] = RPC_REGISTER_SUCCESS;
+  reg_success[2] = warningFlag;
+
+  int bytesSent = send(sockfd, reg_success, sizeof(reg_success), 0);
+}
+
+int send_register_failure(int sockfd, int reasonCode) {
+  int reg_failure[3];
+  reg_failure[0] = 4; //reasonCode is an int so 4 bytes
+  reg_failure[1] = RPC_REGISTER_FAILURE;
+  reg_failure[2] = reasonCode;
+
+  int bytesSent = send(sockfd, reg_failure, sizeof(reg_failure), 0);
 }
 
 // int write_data(int s, char *buf, int n) {

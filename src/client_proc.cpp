@@ -98,6 +98,17 @@ int main() {
   // int bytesSent = send(binderSockFd, &head, len, 0);
 
   //send_terminate(binderSockFd);
+  //send_register_failure(binderSockFd, 23);
+  char func[64] = "saiprasad";
+  int argTypes[5];
+  argTypes[0] = 100;
+  argTypes[1] = 200;
+  argTypes[2] = 500;
+  argTypes[3] = 600;
+  argTypes[4] = 0;
+
+  //printf("The size of func: %d\n and size of argTypes: %d\n", N_ELEMENTS(func), N_ELEMENTS(argTypes));
+  send_loc_request(binderSockFd, func, argTypes, N_ELEMENTS(argTypes));
 
   close(binderSockFd);
 

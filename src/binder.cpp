@@ -22,6 +22,7 @@
 using namespace std;
 
 class BinderServer {
+  // binder server receives loc_requests, register and terminate
   private:
     int sockSelfFd; // socket that accepts connections from client and servers
     
@@ -56,11 +57,81 @@ class BinderServer {
       return sockSelfFd; //TODO error checking here
     }
 
+    // blocking full message read - spawned on a different thread on accepting
+    int read_message(int sockfd) {
+      int* head = read_head(sockfd); // don't think we need to clean this up
+      int len = head[0];
+      int type = head[1];
+
+      switch(type) {
+        case RPC_TERMINATE:
+          // add to queue of messages to be processed (graceful termination)
+          terminate();
+          break;
+        case RPC_LOC_REQUEST:
+          // read additional message
+          read_loc_request(sockfd, len);
+          // add to queue of messages to be processed
+          break;
+        case RPC_REGISTER:
+          // read additional content of the message
+          read_register(sockfd, len);
+          // add to queue of messages to be processed
+          break;
+        default:
+          // invalid message type -- raise error of some sort
+          invalid_method(sockfd);
+      }
+
+      return 0;
+    }
+
+    int read_loc_request(int sockfd, int len) {
+      int argTypesSize = (len - 64)/4;
+      char funcName[64];
+      int argTypes[argTypesSize];
+      int nbytes;
+
+      nbytes = recv(sockfd, funcName, 64, 0);
+
+      nbytes = recv(sockfd, argTypes, (len - 64), 0);
+
+      printf("The func name read is: %s\nThe last elem of argTypes is: %d\n", funcName, argTypes[4]);
+
+      return 0;
+    }
+
+    int read_register(int sockfd, int len) {
+      int argTypesSize = (len - 128 - 2 - 64)/4; // subtract the size of hostname, portnum, funcName
+      char server_identifier[128];
+      char funcName[64];
+      unsigned int portnum;
+      int argTypes[argTypesSize];
+      int nbytes;
+
+      nbytes = recv(sockfd, server_identifier, 128, 0);
+
+      nbytes = recv(sockfd, &portnum, 2, 0);
+
+      nbytes = recv(sockfd, funcName, 64, 0);
+
+      nbytes = recv(sockfd, argTypes, (len - 128 - 2 - 64)/4, 0);
+
+      printf("READ: The server registered is: %s\nThe port of server is: %huThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, portnum, funcName, argTypes[0]);
+      
+      return 0;
+    }
+
     int terminate(){
       // terminate all the servers
 
       // terminate self - shut off the sockets and clean up memory used
       return 0;
+    }
+
+    int invalid_method(int sockfd) {
+      printf("Invalid method\n");
+      return 0; //or some warning
     }
 
 
@@ -128,7 +199,12 @@ int main() {
   send(sockToClientfd, &a, sizeof(a), 0);
   send(sockToClientfd, &b, sizeof(b), 0);
 
-  read_message(sockToClientfd);
+  // int* head = read_head(sockToClientfd);
+  // int len = head[0];
+  // int type = head[1];
+  // printf("Received message (head).. len=%d and type=%d\n", len, type);
+
+  BinderServer::getInstance()->read_message(sockToClientfd);
 
   close(sockToClientfd);
   close(sockfd);
