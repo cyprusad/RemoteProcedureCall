@@ -350,7 +350,7 @@ int* read_head(int sockfd) {
 
 //blocking send calls (block till full message is sent)
 int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes) {
-  int len = 64 + sizeOfArgTypes*4; //funcName is is considered const size (max 64)
+  int len = (sizeof(char)*64) + sizeOfArgTypes*4; //funcName is is considered const size (max 64)
   
   int head[2];
   head[0] = len;
@@ -362,9 +362,9 @@ int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgT
 
   bytesSent = send(sockfd, head, sizeof(head), 0);
 
-  bytesSent = send(sockfd, funcName, 64, 0);
+  bytesSent = send(sockfd, funcName, (sizeof(char)*64), 0);
 
-  bytesSent = send(sockfd, argTypes, sizeOfArgTypes, 0);
+  bytesSent = send(sockfd, argTypes, sizeOfArgTypes*4, 0);
 
   return 0;
 }
@@ -380,7 +380,7 @@ int send_terminate(int sockfd) {
 
 int send_execute_failure(int sockfd, int reasonCode) {
   int exec_failure[3];
-  exec_failure[0] = 4; //reasonCode is an int so 4 bytes
+  exec_failure[0] = sizeof(int); //reasonCode is an int so 4 bytes
   exec_failure[1] = RPC_EXECUTE_FAILURE;
   exec_failure[2] = reasonCode;
 
@@ -395,7 +395,7 @@ int send_loc_success(int sockfd, char hostname[], int port) {
 
 int send_loc_failure(int sockfd, int reasonCode) {
   int loc_failure[3];
-  loc_failure[0] = 4; //reasonCode is an int so 4 bytes
+  loc_failure[0] = sizeof(int); //reasonCode is an int so 4 bytes
   loc_failure[1] = RPC_LOC_FAILURE;
   loc_failure[2] = reasonCode;
 
@@ -404,7 +404,7 @@ int send_loc_failure(int sockfd, int reasonCode) {
 }
 
 int send_register(int sockfd, char server_identifier[], unsigned short port, char funcName[], int argTypes[], int sizeOfArgTypes) {
-  int len = 128 + 2 + 64 + sizeOfArgTypes*4;
+  int len = sizeof(char)*128 + sizeof(unsigned short)*2 + sizeof(char)*64 + sizeOfArgTypes*4;
 
   int head[2];
   head[0] = len;
@@ -416,13 +416,13 @@ int send_register(int sockfd, char server_identifier[], unsigned short port, cha
 
   bytesSent = send(sockfd, head, sizeof(head), 0);
 
-  bytesSent = send(sockfd, server_identifier, 128, 0);
+  bytesSent = send(sockfd, server_identifier, sizeof(char)*128, 0);
 
-  bytesSent = send(sockfd, &port, 2, 0);
+  bytesSent = send(sockfd, &port, sizeof(unsigned short)*2, 0);
 
-  bytesSent = send(sockfd, funcName, 64, 0);
+  bytesSent = send(sockfd, funcName, sizeof(char)*64, 0);
 
-  bytesSent = send(sockfd, argTypes, sizeOfArgTypes, 0);
+  bytesSent = send(sockfd, argTypes, sizeOfArgTypes*4, 0);
 
   return 0;
 
@@ -430,7 +430,7 @@ int send_register(int sockfd, char server_identifier[], unsigned short port, cha
 
 int send_register_success(int sockfd, int warningFlag) {
   int reg_success[3];
-  reg_success[0] = 4; //warningFlag is an int so 4 bytes
+  reg_success[0] = sizeof(int); //warningFlag is an int so 4 bytes
   reg_success[1] = RPC_REGISTER_SUCCESS;
   reg_success[2] = warningFlag;
 
@@ -439,7 +439,7 @@ int send_register_success(int sockfd, int warningFlag) {
 
 int send_register_failure(int sockfd, int reasonCode) {
   int reg_failure[3];
-  reg_failure[0] = 4; //reasonCode is an int so 4 bytes
+  reg_failure[0] = sizeof(int); //reasonCode is an int so 4 bytes
   reg_failure[1] = RPC_REGISTER_FAILURE;
   reg_failure[2] = reasonCode;
 
