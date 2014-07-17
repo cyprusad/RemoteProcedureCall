@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <vector>
+#include <string>
 
 #include "rpc.h"
 #include "sck_stream.h"
@@ -17,9 +19,116 @@
 #define PORTNUM 0
 
 #define PORT "0"
-//void fireman(void);
 
 using namespace std;
+
+//TODO change all to pointers later
+// TODO move to separate header
+
+// always unique
+class ServerPortCombo {
+  public:
+    string name;
+    unsigned short port;
+
+    ServerPortCombo(string n, unsigned int p) {
+      name = n;
+      port = p;
+    }
+
+
+};
+
+class ClientResp {
+  public:
+    int respCode;
+    ServerPortCombo server;
+
+    // -1 response would mean that no such function is registered with the binder; anything else will give the server/port
+    ClientResp(int res, ServerPortCombo s) {
+      respCode = res;
+      server = s;
+    }
+};
+
+class Arg {
+  public:
+    bool input;
+    bool output;
+    int type;
+    bool isArray;
+
+    Arg(bool in, bool out, int t, bool is_arr) {
+      input = in;
+      output = out;
+      type = t;
+      isArray = is_arr;
+    }
+
+    bool equals(Arg other) {
+      if (input != other.input) {
+        return false;
+      } else if (output != other.output) {
+        return false;
+      } else if (type != other.type) {
+        return false;
+      } else if (isArray != other.isArray) {
+        return false;
+      } else {
+        return true;
+      }
+      return true;
+    }
+}; 
+
+class Func {
+  public:
+    string name;
+    vector<Arg> args;
+
+    Func(string funcName, vector<Arg> arguments) {
+      name = funcName;
+      args = arguments;
+    }
+
+    bool equals(Func other) {
+      if (name.compare(other.name) != 0) {
+        return false;
+      } 
+      if (args.size() != other.args.size()) {
+        return false;
+      } else {
+        for (int i = 0; i < args.size(); i++) {
+          if (args[i].equals(other.args[i])){
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+};
+
+// search, look up and conflict resolution done here
+// also make it thread safe
+class Database {
+  public:
+    // for both vectors of funcs and servers, each index denotes matching servers and funcs
+    vector<Func> registeredFunctions;
+    vector<vector<ServerPortCombo>> registeredServers; 
+
+    // return index of registered function if present; -1 if not present
+    int findRegisteredFunction(Func func);
+
+    // go through all the functions and find
+    // round robin algorithm if multiple servers can service this client
+    ClientResp getServerPortComboForFunc(Func func); 
+
+    // check if the fun already exists, in which case add to the existing registered servers for that index
+    int addFunc(Func func, ServerPortCombo server); 
+
+
+};
 
 class BinderServer {
   // binder server receives loc_requests, register and terminate
@@ -36,6 +145,8 @@ class BinderServer {
     //BinderServer();
 
   public:
+    Database db;
+
     static BinderServer* getInstance() {
       if (singleton == 0) {
         singleton = new BinderServer;
@@ -80,21 +191,21 @@ class BinderServer {
           break;
         default:
           // invalid message type -- raise error of some sort
-          invalid_method(sockfd);
+          invalid_message(sockfd);
       }
 
       return 0;
     }
 
     int read_loc_request(int sockfd, int len) {
-      int argTypesSize = (len - 64)/4;
-      char funcName[64];
+      int argTypesSize = (len - (sizeof(char)*64))/4;
+      char funcName[sizeof(char)*64];
       int argTypes[argTypesSize];
       int nbytes;
 
-      nbytes = recv(sockfd, funcName, 64, 0);
+      nbytes = recv(sockfd, funcName, (sizeof(char)*64), 0);
 
-      nbytes = recv(sockfd, argTypes, (len - 64), 0);
+      nbytes = recv(sockfd, argTypes, (len - (sizeof(char)*64)), 0);
 
       printf("The func name read is: %s\nThe last elem of argTypes is: %d\n", funcName, argTypes[4]);
 
@@ -102,23 +213,28 @@ class BinderServer {
     }
 
     int read_register(int sockfd, int len) {
-      int argTypesSize = (len - 128 - 2 - 64)/4; // subtract the size of hostname, portnum, funcName
-      char server_identifier[128];
-      char funcName[64];
+      int argTypesSize = (len - (sizeof(char)*128) - (sizeof(unsigned short)) - (sizeof(char)*64))/4; // subtract the size of hostname, portnum, funcName
+      char server_identifier[sizeof(char)*128];
+      char funcName[sizeof(char)*64];
       unsigned int portnum;
       int argTypes[argTypesSize];
       int nbytes;
 
-      nbytes = recv(sockfd, server_identifier, 128, 0);
+      nbytes = recv(sockfd, server_identifier, (sizeof(char)*128), 0);
 
-      nbytes = recv(sockfd, &portnum, 2, 0);
+      nbytes = recv(sockfd, &portnum, sizeof(unsigned short), 0);
 
-      nbytes = recv(sockfd, funcName, 64, 0);
+      nbytes = recv(sockfd, funcName, (sizeof(char)*64), 0);
 
-      nbytes = recv(sockfd, argTypes, (len - 128 - 2 - 64)/4, 0);
+      nbytes = recv(sockfd, argTypes, (len - (sizeof(char)*128) - (sizeof(unsigned short)) - (sizeof(char)*64)), 0);
 
       printf("READ: The server registered is: %s\nThe port of server is: %huThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, portnum, funcName, argTypes[0]);
-      
+
+      //TODO:
+      // reasons to raise an error/warning:
+      // - while reading data from server, the socket closed for some reason
+      // - the registereing of func fails
+      // - the binder crashes or something else bad happens
       return 0;
     }
 
@@ -129,8 +245,8 @@ class BinderServer {
       return 0;
     }
 
-    int invalid_method(int sockfd) {
-      printf("Invalid method\n");
+    int invalid_message(int sockfd) {
+      printf("Invalid message\n");
       return 0; //or some warning
     }
 
