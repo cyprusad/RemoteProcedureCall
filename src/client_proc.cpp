@@ -5,9 +5,11 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #include "rpc.h"
@@ -25,17 +27,17 @@ class ClientProcess {
     char* BINDER_ADDRESS;
     char* BINDER_PORT;
 
-    ServerPortCombo* locationForCall = NULL;
-
-
   protected:
     ClientProcess() { // called only once in the ctr
       BINDER_ADDRESS = getenv("BINDER_ADDRESS");
       BINDER_PORT = getenv("BINDER_PORT");
 
       binderSockFd = call_sock(BINDER_ADDRESS, BINDER_PORT);
+      locationForCall = NULL;
     }
   public:
+    ServerPortCombo* locationForCall;
+
     static ClientProcess* getInstance() {
       if(singleton == 0) {
         singleton = new ClientProcess();
@@ -134,6 +136,7 @@ class ClientProcess {
         port = locationForCall->port;
 
         cout << "execute :: " << "Sending execute to: " << hostname << ":" << port << endl;
+        // this method is actually sent to the server not the binder
         int resp = send_execute(binderSockFd, hostname, port, argTypes, N_ELEMENTS(argTypes), args, sizeOfArgs);
         
         //free the server/port object
