@@ -20,12 +20,10 @@
 #include "utility.h"
 #include "response_codes.h"
 
-#define NTHREADS 100
-
 using namespace std;
 
-pthread_t threadid[NTHREADS]; // Thread pool
-pthread_mutex_t lck;
+pthread_t b_threadid[NTHREADS]; // Thread pool
+pthread_mutex_t b_lck;
 int isTerminate = 0; // set to 1 when terminate is called
 
 
@@ -296,9 +294,9 @@ class BinderServer {
       Func* queryFunc = new Func(funcName, argTypes, argTypesSize);
 
       //critical section -- get location of server
-      pthread_mutex_lock (&lck);
+      pthread_mutex_lock (&b_lck);
       resp = db->getServerPortComboForFunc(queryFunc);
-      pthread_mutex_unlock (&lck);
+      pthread_mutex_unlock (&b_lck);
 
       delete queryFunc;
 
@@ -311,6 +309,7 @@ class BinderServer {
       printf("READ:\nReading a total of %d bytes\n", len);
 
       int argTypesSize = (len - (sizeof(char)*128) - sizeof(unsigned short) - (sizeof(char)*64))/4; // subtract the size of hostname, portnum, funcName
+      printf("READ: argTypesSize = %d\n", argTypesSize);
       char server_identifier[sizeof(char)*128];
       char funcName[sizeof(char)*64];
       unsigned short portnum;
@@ -326,17 +325,17 @@ class BinderServer {
 
       nbytes = recv(sockfd, argTypes, (argTypesSize*4), 0);
 
-      printf("READ: Thesize of arg types %d\nThe server registered is: %s\nThe port of server is: %u\nThe func name is: %s\nThe first elem of argTypes is: %d\n",argTypesSize, server_identifier, portnum, funcName, argTypes[0]);
+      printf("READ: The size of arg types %d\nThe server registered is: %s\nThe port of server is: %u\nThe func name is: %s\nThe first elem of argTypes is: %d\n",argTypesSize, server_identifier, portnum, funcName, argTypes[0]);
 
-      pthread_mutex_lock (&lck);
+      pthread_mutex_lock (&b_lck);
       uniqueServer = db->fetchUniqueServer(server_identifier, portnum, sockfd);
-      pthread_mutex_lock (&lck);
+      pthread_mutex_lock (&b_lck);
 
       toAdd = new Func(funcName, argTypes, argTypesSize);
 
-      pthread_mutex_lock (&lck);
+      pthread_mutex_lock (&b_lck);
       respAddFunc = db->addFunc(toAdd, uniqueServer);
-      pthread_mutex_unlock (&lck);
+      pthread_mutex_unlock (&b_lck);
     
       //TODO:
       // reasons to raise an error/warning:
@@ -353,9 +352,9 @@ class BinderServer {
         sendResp = send_terminate(sockfd);
       }
 
-      pthread_mutex_lock (&lck);
+      pthread_mutex_lock (&b_lck);
       isTerminate = 1;
-      pthread_mutex_unlock (&lck);
+      pthread_mutex_unlock (&b_lck);
 
       // if the send happened successfully then 
       return BS_SUCC_SEND_TERM_SERVER ;
@@ -415,15 +414,15 @@ int main() {
 
      cout << "main thread :: " << "The sock accepted is " << sockIncomingFd << endl;
 
-     pthread_mutex_lock (&lck);
+     pthread_mutex_lock (&b_lck);
      terminate = isTerminate;
-     pthread_mutex_unlock (&lck);
+     pthread_mutex_unlock (&b_lck);
 
      if (terminate != 0) {
       break;
      }
 
-     pthread_create(&threadid[i++], NULL, &threadworker, (void *) sockIncomingFd);
+     pthread_create(&b_threadid[i++], &attr, &threadworker, (void *) sockIncomingFd);
      sleep(0); // Giving threads some CPU time
   }
 

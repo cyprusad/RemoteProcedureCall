@@ -2,6 +2,8 @@
 extern "C" {
 #endif
 
+#define NTHREADS 100
+
 // always unique
 class ServerPortCombo {
   public:
