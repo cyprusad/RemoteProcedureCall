@@ -14,7 +14,7 @@ ServerPortCombo::ServerPortCombo(char* n, unsigned int p) {
 }
 
 ServerPortCombo::~ServerPortCombo() {
-  cout << "~ServerPortCombo :: " << "server/port destructor" << endl;
+  cout << "~ServerPortCombo :: " << "destructor for server name: " << name << " and port " << port << endl;
 }
 
 int ServerPortCombo::equals(ServerPortCombo* other) {
