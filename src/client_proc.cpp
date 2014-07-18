@@ -181,25 +181,25 @@ int rpcTerminate() {
   return res;
 }
 
-int main() {
-  int binderSockFd = ClientProcess::getInstance()->getBinderSockFd();
+// int main() {
+//   int binderSockFd = ClientProcess::getInstance()->getBinderSockFd();
  
-  char name[64] = "derp";
-  int argTypes1[5];
-  argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-  argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
-  argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
-  argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
-  argTypes1[4] = 0;
+//   char name[64] = "derp";
+//   int argTypes1[5];
+//   argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
+//   argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
+//   argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
+//   argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
+//   argTypes1[4] = 0;
 
-  int resp = ClientProcess::getInstance()->locationRequest(name, argTypes1, N_ELEMENTS(argTypes1)); // fire the message to binder
+//   int resp = ClientProcess::getInstance()->locationRequest(name, argTypes1, N_ELEMENTS(argTypes1)); // fire the message to binder
 
-  resp = ClientProcess::getInstance()->read_message(binderSockFd); // read either loc_success / failure
+//   resp = ClientProcess::getInstance()->read_message(binderSockFd); // read either loc_success / failure
 
-  //printf("The size of func: %d\n and size of argTypes: %d\n", N_ELEMENTS(func), N_ELEMENTS(argTypes));
-  //rpcCall()
+//   //printf("The size of func: %d\n and size of argTypes: %d\n", N_ELEMENTS(func), N_ELEMENTS(argTypes));
+//   //rpcCall()
 
-  //close(ClientProcess::getInstance()->getBinderSockFd()); // TODO I don't think we ever close conn to binder -- perhaps in binder
-  return 0;
-}
+//   //close(ClientProcess::getInstance()->getBinderSockFd()); // TODO I don't think we ever close conn to binder -- perhaps in binder
+//   return 0;
+// }
 

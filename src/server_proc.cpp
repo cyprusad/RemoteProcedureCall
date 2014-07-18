@@ -214,22 +214,22 @@ int rpcExecute() {
 
 }
 
-// This main is basically like what will be executed when rpcExecute is called
-int main() {
-  ServerProcess::getInstance()->startServer();
-  //int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
+// // This main is basically like what will be executed when rpcExecute is called
+// int main() {
+//   ServerProcess::getInstance()->startServer();
+//   //int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
 
-  int binderSockFd = ServerProcess::getInstance()->getBinderSockFd();
+//   int binderSockFd = ServerProcess::getInstance()->getBinderSockFd();
 
-  int count0 = 3;
-  int argTypes0[count0 + 1];
-  argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16);
-  argTypes0[1] = (1 << ARG_INPUT) | (ARG_INT << 16);
-  argTypes0[2] = (1 << ARG_INPUT) | (ARG_INT << 16);
-  argTypes0[3] = 0;
+//   int count0 = 3;
+//   int argTypes0[count0 + 1];
+//   argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16);
+//   argTypes0[1] = (1 << ARG_INPUT) | (ARG_INT << 16);
+//   argTypes0[2] = (1 << ARG_INPUT) | (ARG_INT << 16);
+//   argTypes0[3] = 0;
  
-  // rpcRegister("f0", argTypes0, *f0_Skel);
+//   // rpcRegister("f0", argTypes0, *f0_Skel);
 
-  return 0;
-}
+//   return 0;
+// }
 
