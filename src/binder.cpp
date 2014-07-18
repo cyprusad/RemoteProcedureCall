@@ -16,158 +16,153 @@
 #include "rpc.h"
 #include "sck_stream.h"
 #include "message_protocol.h" 
-//#include "binder.h"
-
-#define PORTNUM 0
-
-#define PORT "0"
+#include "utility.h"
 
 using namespace std;
 
-//TODO change all to pointers later
 // TODO move to separate header
 
-// always unique
-class ServerPortCombo {
-  public:
-    string name;
-    unsigned short port;
+// // always unique
+// class ServerPortCombo {
+//   public:
+//     string name;
+//     unsigned short port;
 
-    ServerPortCombo(char* n, unsigned int p) {
-      name.assign(n);
-      port = p;
-    }
+//     ServerPortCombo(char* n, unsigned int p) {
+//       name.assign(n);
+//       port = p;
+//     }
 
-    ~ServerPortCombo() {
-      cout << "~ServerPortCombo :: " << "server/port destructor" << endl;
-    }
+//     ~ServerPortCombo() {
+//       cout << "~ServerPortCombo :: " << "server/port destructor" << endl;
+//     }
 
-    int equals(ServerPortCombo* other) {
-      if (name.compare(other->name) != 0) {
-        return -1;
-      } 
-      if (port != other->port) {
-        return -1;
-      }
-      return 0; // if you made it here, then they're both equal
-    }
-};
+//     int equals(ServerPortCombo* other) {
+//       if (name.compare(other->name) != 0) {
+//         return -1;
+//       } 
+//       if (port != other->port) {
+//         return -1;
+//       }
+//       return 0; // if you made it here, then they're both equal
+//     }
+// };
 
-class ClientResp {
-  public:
-    int respCode;
-    ServerPortCombo* server;
+// class ClientResp {
+//   public:
+//     int respCode;
+//     ServerPortCombo* server;
 
-    // -1 response would mean that no such function is registered with the binder; anything else will give the server/port
-    ClientResp(int res, ServerPortCombo* s) {
-      respCode = res;
-      server = s;
-    }
+//     // -1 response would mean that no such function is registered with the binder; anything else will give the server/port
+//     ClientResp(int res, ServerPortCombo* s) {
+//       respCode = res;
+//       server = s;
+//     }
 
-    ~ClientResp() {
-      cout << "~ClientResp :: " << "client resp destructor" << endl;
-    }
-};
+//     ~ClientResp() {
+//       cout << "~ClientResp :: " << "client resp destructor" << endl;
+//     }
+// };
 
-class Arg {
-  public:
-    bool input;
-    bool output;
-    int type;
-    int arrSize;
+// class Arg {
+//   public:
+//     bool input;
+//     bool output;
+//     int type;
+//     int arrSize;
 
-    Arg(bool in, bool out, int t, int arr_size) {
-      input = in;
-      output = out;
-      type = t;
-      arrSize = arr_size;
-    }
+//     Arg(bool in, bool out, int t, int arr_size) {
+//       input = in;
+//       output = out;
+//       type = t;
+//       arrSize = arr_size;
+//     }
 
-    ~Arg() {
-      cout << "~Arg :: " << "arg destructor -- bottom of the stack" << endl;
-    }
+//     ~Arg() {
+//       cout << "~Arg :: " << "arg destructor -- bottom of the stack" << endl;
+//     }
 
-    // just checks the equality of argument signatures
-    int equals(Arg* other) {
-      if (input != other->input) {
-        return -1;
-      } else if (output != other->output) {
-        return -1;
-      } else if (type != other->type) {
-        return -1;
-      } else { // checked first three members, only array sizes remain
-        if (arrSize == 0) { // client method is a scalar
-          if (other->arrSize > 0) {
-            return -1; // registered method has array
-          } 
-        } else if(other->arrSize == 0) {
-          if (arrSize > 0) {
-            return -1; // we are an array but the registered method is a scalar
-          } 
-        } else {
-          if (arrSize > other->arrSize) {
-            return 2; // some kind of warning saying that the client array is greater than the max the server would like to allocate
-          } 
-        }
-      }
-      return 0; // if you made it this far, you are okay
-    }
+//     // just checks the equality of argument signatures
+//     int equals(Arg* other) {
+//       if (input != other->input) {
+//         return -1;
+//       } else if (output != other->output) {
+//         return -1;
+//       } else if (type != other->type) {
+//         return -1;
+//       } else { // checked first three members, only array sizes remain
+//         if (arrSize == 0) { // client method is a scalar
+//           if (other->arrSize > 0) {
+//             return -1; // registered method has array
+//           } 
+//         } else if(other->arrSize == 0) {
+//           if (arrSize > 0) {
+//             return -1; // we are an array but the registered method is a scalar
+//           } 
+//         } else {
+//           if (arrSize > other->arrSize) {
+//             return 2; // some kind of warning saying that the client array is greater than the max the server would like to allocate
+//           } 
+//         }
+//       }
+//       return 0; // if you made it this far, you are okay
+//     }
 
-    // ensure that the arg is not zero!
-    static Arg* parseArg(int* arg) {
-      return new Arg((*arg & INPUT_MASK) >> ARG_INPUT, 
-                     (*arg & OUTPUT_MASK) >> ARG_OUTPUT, 
-                     (*arg & TYPE_MASK) >> 16,
-                     (*arg & ARRAY_MASK));
-    }
-}; 
+//     // ensure that the arg is not zero!
+//     static Arg* parseArg(int* arg) {
+//       return new Arg((*arg & INPUT_MASK) >> ARG_INPUT, 
+//                      (*arg & OUTPUT_MASK) >> ARG_OUTPUT, 
+//                      (*arg & TYPE_MASK) >> 16,
+//                      (*arg & ARRAY_MASK));
+//     }
+// }; 
 
-class Func {
-  public:
-    string name;
-    vector<Arg*> arguments;
+// class Func {
+//   public:
+//     string name;
+//     vector<Arg*> arguments;
 
-    Func(char* funcName, int argTypes[], int sizeOfArgTypes) {
-      name.assign(funcName);
-      arguments.reserve(sizeOfArgTypes - 1);
+//     Func(char* funcName, int argTypes[], int sizeOfArgTypes) {
+//       name.assign(funcName);
+//       arguments.reserve(sizeOfArgTypes - 1);
 
-      int* iterator = argTypes;
-      while(*iterator != 0) {
-        arguments.push_back(Arg::parseArg(iterator));
-        iterator++; 
-      }
-    }
+//       int* iterator = argTypes;
+//       while(*iterator != 0) {
+//         arguments.push_back(Arg::parseArg(iterator));
+//         iterator++; 
+//       }
+//     }
 
-    ~Func() {
-      cout << "~Func :: " << "Func destructor for funcName = " << name << endl;
-      for (vector<Arg*>::iterator it = arguments.begin() ; it != arguments.end(); ++it) {
-        delete *it;
-      }
-      arguments.clear();
-    }
+//     ~Func() {
+//       cout << "~Func :: " << "Func destructor for funcName = " << name << endl;
+//       for (vector<Arg*>::iterator it = arguments.begin() ; it != arguments.end(); ++it) {
+//         delete *it;
+//       }
+//       arguments.clear();
+//     }
 
-    int equals(Func* other) {
-      int warningFlag = 0;
-      if (name.compare(other->name) != 0) {
-        return -1;
-      } 
-      if (arguments.size() != other->arguments.size()) {
-        return -1;
-      } else {
-        for (int i = 0; i < arguments.size(); i++) {
-          if (arguments[i]->equals(other->arguments[i]) < 0) { // one of the arguments don't match 
-            return -1;
-          } else if (arguments[i]->equals(other->arguments[i]) > 0) {
-            warningFlag = arguments[i]->equals(other->arguments[i]); // generated warning flag
-          }
-        }
-        if (warningFlag != 0) {
-          return warningFlag; // all the arguments and func names match, but client is requesting larger array than server wants to allocate
-        }
-      }
-      return 0;
-    }
-};
+//     int equals(Func* other) {
+//       int warningFlag = 0;
+//       if (name.compare(other->name) != 0) {
+//         return -1;
+//       } 
+//       if (arguments.size() != other->arguments.size()) {
+//         return -1;
+//       } else {
+//         for (int i = 0; i < arguments.size(); i++) {
+//           if (arguments[i]->equals(other->arguments[i]) < 0) { // one of the arguments don't match 
+//             return -1;
+//           } else if (arguments[i]->equals(other->arguments[i]) > 0) {
+//             warningFlag = arguments[i]->equals(other->arguments[i]); // generated warning flag
+//           }
+//         }
+//         if (warningFlag != 0) {
+//           return warningFlag; // all the arguments and func names match, but client is requesting larger array than server wants to allocate
+//         }
+//       }
+//       return 0;
+//     }
+// };
 
 // search, look up and conflict resolution done here
 // also make it thread safe
@@ -523,8 +518,8 @@ int main() {
   // bool b = 10;
   // cout << "This bool is true " << b << endl;
 
-  Arg* someArg1 = Arg::parseArg(&argTypes0[3]);
-  Arg* someArg2 = Arg::parseArg(&argTypes0[1]);
+  Arg* someArg1 = new Arg(&argTypes0[3]);
+  Arg* someArg2 = new Arg(&argTypes0[1]);
 
 
   // printf("The arg is inp %d\n", someArg->input);
