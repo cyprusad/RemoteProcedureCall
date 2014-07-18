@@ -249,13 +249,7 @@ class BinderDatabase {
             break; // server is already registered with binder for this function (doing it twice)
           }
         }
-        // for (int i = 0; i < registeredServers[findResult].size(); i++) {
-        //   if (server->equals(registeredServers[findResult][i]) == 0) {
-        //     alreadyPresent = 1;
-        //     cout << "addFunc :: " << "This server has already registered this func" << endl;
-        //     break; // server is already registered with binder for this function (doing it twice)
-        //   }
-        // }
+     
         if (alreadyPresent == 0) { //same server is NOT registered for this func
           registeredServers[findResult].push_back(server); // add new server registered for same function
           cout << "addFunc :: " << "The number of servers registered for same func are: " << registeredServers[findResult].size() << endl;
@@ -348,6 +342,16 @@ class BinderServer {
 
       printf("The func name read is: %s\nThe last elem of argTypes is: %d\n", funcName, argTypes[4]);
 
+
+      // this should be in a critical section
+      ClientResp* resp = BinderDatabase::getInstance()->getServerPortComboForFunc(new Func(funcName, argTypes, argTypesSize));
+
+      if (resp->respCode < 0) {
+        // we DONT have a server that will process the request for us
+
+        //send location failure to the client
+      }
+
       return 0;
     }
 
@@ -375,7 +379,9 @@ class BinderServer {
       int resp = BinderDatabase::getInstance()->addFunc(new Func(funcName, argTypes, argTypesSize),
                                                         new ServerPortCombo(server_identifier, portnum));
 
-
+      if (resp < 0) {
+        // registration was NOT successful, send registration failure
+      }
 
       //TODO:
       // reasons to raise an error/warning:
