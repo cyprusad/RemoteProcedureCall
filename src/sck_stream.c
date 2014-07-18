@@ -340,8 +340,8 @@ int* read_head(int sockfd) {
   int nbytes;
 
   nbytes = recv(sockfd, head, sizeof(head), 0);
-  printf("read %d bytes\n", nbytes);
-  printf("read len: %d \nread type: %d \n", head[0], head[1]);
+  // printf("read %d bytes\n", nbytes);
+  // printf("read len: %d \nread type: %d \n", head[0], head[1]);
 
   return head;
 }
@@ -351,7 +351,7 @@ int* read_head(int sockfd) {
 //blocking send calls (block till full message is sent)
 int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes) {
   int len = (sizeof(char)*64) + sizeOfArgTypes*4; //funcName is is considered const size (max 64)
-  
+  printf("SEND:\nSending total of %d bytes\n", len);
   int head[2];
   head[0] = len;
   head[1] = RPC_LOC_REQUEST;
@@ -406,11 +406,12 @@ int send_loc_failure(int sockfd, int reasonCode) {
 int send_register(int sockfd, char server_identifier[], unsigned short port, char funcName[], int argTypes[], int sizeOfArgTypes) {
   int len = sizeof(char)*128 + sizeof(unsigned short)*2 + sizeof(char)*64 + sizeOfArgTypes*4;
 
+  printf("SEND:\nSending total of %d bytes\n", len);
   int head[2];
   head[0] = len;
   head[1] = RPC_REGISTER;
 
-  printf("SEND: The server registered is: %s\nThe port of server is: %huThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, port, funcName, argTypes[0]);
+  printf("The server registered is: %s\nThe port of server is: %u\nThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, port, funcName, argTypes[0]);
 
   int bytesSent;
 
@@ -418,7 +419,7 @@ int send_register(int sockfd, char server_identifier[], unsigned short port, cha
 
   bytesSent = send(sockfd, server_identifier, sizeof(char)*128, 0);
 
-  bytesSent = send(sockfd, &port, sizeof(unsigned short)*2, 0);
+  bytesSent = send(sockfd, &port, sizeof(unsigned short), 0);
 
   bytesSent = send(sockfd, funcName, sizeof(char)*64, 0);
 

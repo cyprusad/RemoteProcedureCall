@@ -54,7 +54,7 @@ class ServerProcess {
     int startServer();
 
     int registerWithBinder(char* name, int* argTypes) {
-      int res = send_register(sockBinderFd, SERVER_ADDRESS, SERVER_PORT, name, argTypes);
+      int res = send_register(sockBinderFd, SERVER_ADDRESS, SERVER_PORT, name, argTypes, N_ELEMENTS(argTypes));
       return res;
     } 
 
@@ -76,7 +76,7 @@ class ServerProcess {
           break;
         case RPC_EXECUTE:
           read_execute(sockfd, len);
-          break:
+          break;
         default:
           // invalid message type -- raise error of some sort
           invalid_message(sockfd);
@@ -89,7 +89,7 @@ class ServerProcess {
 
       nbytes = recv(sockfd, &warningFlag, sizeof(int), 0);
 
-      printf("The warningFlag is: %d\n". warningFlag);
+      printf("The warningFlag is: %d\n", warningFlag);
       return 0;
     }
 
@@ -99,7 +99,7 @@ class ServerProcess {
 
       nbytes = recv(sockfd, &reasonCode, sizeof(int), 0);
 
-      printf("The reasonCode is: %d\n". warningFlag);
+      printf("The reasonCode is: %d\n", reasonCode);
       return 0;
     }
 
@@ -157,10 +157,29 @@ int rpcExecute() {
 
 }
 
+// This main is basically like what will be executed when rpcExecute is called
 int main() {
   ServerProcess::getInstance()->startServer();
-  int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
+  //int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
 
+  char herp[64] = "herp";
+  int argTypes0[5];
+  argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
+  argTypes0[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
+  argTypes0[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
+  argTypes0[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
+  argTypes0[4] = 0;
+
+  char derp[64] = "derp";
+  int argTypes1[5];
+  argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
+  argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
+  argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
+  argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
+  argTypes1[4] = 0;
+
+  //send_register(ServerProcess::getInstance()->getBinderSockFd(), SERVER_ADDRESS, SERVER_PORT, herp, argTypes, N_ELEMENTS(argTypes));
+  ServerProcess::getInstance()->registerWithBinder(herp, argTypes0);
   return 0;
 }
 

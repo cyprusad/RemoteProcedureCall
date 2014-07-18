@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <vector>
 #include <string>
+#include <iostream> 
 
 #include "rpc.h"
 #include "sck_stream.h"
@@ -31,21 +32,19 @@ class ServerPortCombo {
     string name;
     unsigned short port;
 
-    ServerPortCombo(string n, unsigned int p) {
-      name = n;
+    ServerPortCombo(char* n, unsigned int p) {
+      name.assign(n);
       port = p;
     }
-
-
 };
 
 class ClientResp {
   public:
     int respCode;
-    ServerPortCombo server;
+    ServerPortCombo* server;
 
     // -1 response would mean that no such function is registered with the binder; anything else will give the server/port
-    ClientResp(int res, ServerPortCombo s) {
+    ClientResp(int res, ServerPortCombo* s) {
       respCode = res;
       server = s;
     }
@@ -56,79 +55,154 @@ class Arg {
     bool input;
     bool output;
     int type;
-    bool isArray;
+    int arrSize;
 
-    Arg(bool in, bool out, int t, bool is_arr) {
+    Arg(bool in, bool out, int t, int arr_size) {
       input = in;
       output = out;
       type = t;
-      isArray = is_arr;
+      arrSize = arr_size;
     }
 
-    bool equals(Arg other) {
-      if (input != other.input) {
-        return false;
-      } else if (output != other.output) {
-        return false;
-      } else if (type != other.type) {
-        return false;
-      } else if (isArray != other.isArray) {
-        return false;
-      } else {
-        return true;
+    // just checks the equality of argument signatures
+    int equals(Arg* other) {
+      if (input != other->input) {
+        return -1;
+      } else if (output != other->output) {
+        return -1;
+      } else if (type != other->type) {
+        return -1;
+      } else { // checked first three members, only array sizes remain
+        if (arrSize == 0) { // client method is a scalar
+          if (other->arrSize > 0) {
+            return -1; // registered method has array
+          } 
+        } else if(other->arrSize == 0) {
+          if (arrSize > 0) {
+            return -1; // we are an array but the registered method is a scalar
+          } 
+        } else {
+          if (arrSize > other->arrSize) {
+            return 2; // some kind of warning saying that the client array is greater than the max the server would like to allocate
+          } 
+        }
       }
-      return true;
+      return 0; // if you made it this far, you are okay
+    }
+
+    // ensure that the arg is not zero!
+    static Arg* parseArg(int* arg) {
+      return new Arg((*arg & INPUT_MASK) >> ARG_INPUT, 
+                     (*arg & OUTPUT_MASK) >> ARG_OUTPUT, 
+                     (*arg & TYPE_MASK) >> 16,
+                     (*arg & ARRAY_MASK));
     }
 }; 
 
 class Func {
   public:
     string name;
-    vector<Arg> args;
+    vector<Arg*> arguments;
 
-    Func(string funcName, vector<Arg> arguments) {
-      name = funcName;
-      args = arguments;
+    Func(char* funcName, int argTypes[], int sizeOfArgTypes) {
+      name.assign(funcName);
+      arguments.reserve(sizeOfArgTypes - 1);
+
+      int* iterator = argTypes;
+      while(*iterator != 0) {
+        arguments.push_back(Arg::parseArg(iterator));
+        iterator++; 
+      }
     }
 
-    bool equals(Func other) {
-      if (name.compare(other.name) != 0) {
-        return false;
+    int equals(Func* other) {
+      int warningFlag = 0;
+      if (name.compare(other->name) != 0) {
+        return -1;
       } 
-      if (args.size() != other.args.size()) {
-        return false;
+      if (arguments.size() != other->arguments.size()) {
+        return -1;
       } else {
-        for (int i = 0; i < args.size(); i++) {
-          if (args[i].equals(other.args[i])){
-            return false;
+        for (int i = 0; i < arguments.size(); i++) {
+          if (arguments[i]->equals(other->arguments[i]) < 0) { // one of the arguments don't match 
+            return -1;
+          } else if (arguments[i]->equals(other->arguments[i]) > 0) {
+            warningFlag = arguments[i]->equals(other->arguments[i]); // generated warning flag
           }
         }
+        if (warningFlag != 0) {
+          return warningFlag; // all the arguments and func names match, but client is requesting larger array than server wants to allocate
+        }
       }
-      return true;
+      return 0;
     }
-
 };
 
 // search, look up and conflict resolution done here
 // also make it thread safe
-class Database {
-  public:
+// NOTE  - so the singleton needs to be created before any threads are started - and after that
+// access to the database should be in critical sections
+class BinderDatabase {
+  private:
     // for both vectors of funcs and servers, each index denotes matching servers and funcs
-    vector<Func> registeredFunctions;
-    vector<vector<ServerPortCombo>> registeredServers; 
+    vector<Func*> registeredFunctions;
+    vector< vector<ServerPortCombo*> > registeredServers; 
+    
+    static BinderDatabase* singleton;  
 
+  public:
+    static BinderDatabase* getInstance() {
+      if (singleton == 0) {
+        singleton = new BinderDatabase();
+      }
+      return singleton;
+    }
+
+    ~BinderDatabase() {
+      // clean all func and arg objects stored
+
+    }
     // return index of registered function if present; -1 if not present
-    int findRegisteredFunction(Func func);
+    //TODO if we are going to use this func for the client as well then do something about client/server array size
+    int findRegisteredFunction(Func* func) { //used only internally by the database to register servers so far
+      int respCode;
+      if (registeredFunctions.size() == 0) {
+        return -1; // no function has been registered yet
+      } else {
+        for (int i = 0; i < registeredFunctions.size(); i++) {
+          respCode = func->equals(registeredFunctions[i]);
+          if (respCode == 0 || respCode == 2) { // exact match or differ by array size for some arg
+            return i;
+          }
+        }
+      }
+      return -1; // if we made it this far then we didn't find the function
+    }
 
     // go through all the functions and find
     // round robin algorithm if multiple servers can service this client
-    ClientResp getServerPortComboForFunc(Func func); 
+    ClientResp* getServerPortComboForFunc(Func func); 
 
     // check if the fun already exists, in which case add to the existing registered servers for that index
-    int addFunc(Func func, ServerPortCombo server); 
+    int addFunc(Func* func, ServerPortCombo* server) {
+      cout << "Func name recv: " << func->name << endl << " Server name recv: " << server->name << endl;
+      int findResult = findRegisteredFunction(func);
+      // NOTE -2 is reserved for case when client wants more space than server but otherwise same
+      if (findResult == -1) { // seeing this function for the first time 
+        registeredFunctions.push_back(func);
+        vector<ServerPortCombo*> circularList;
+        circularList.push_back(server);
+        registeredServers.push_back(circularList);
+      } else { // this 
+        // this might be problematic because we might need a vector of vector pointers
+        // HMMMMM
+      }
+    }
 
 
 };
+
+BinderDatabase* BinderDatabase::singleton = NULL;
 
 class BinderServer {
   // binder server receives loc_requests, register and terminate
@@ -145,7 +219,6 @@ class BinderServer {
     //BinderServer();
 
   public:
-    Database db;
 
     static BinderServer* getInstance() {
       if (singleton == 0) {
@@ -213,10 +286,12 @@ class BinderServer {
     }
 
     int read_register(int sockfd, int len) {
-      int argTypesSize = (len - (sizeof(char)*128) - (sizeof(unsigned short)) - (sizeof(char)*64))/4; // subtract the size of hostname, portnum, funcName
+      printf("READ:\nReading a total of %d bytes\n", len);
+
+      int argTypesSize = (len - (sizeof(char)*128) - sizeof(unsigned short) - (sizeof(char)*64))/4; // subtract the size of hostname, portnum, funcName
       char server_identifier[sizeof(char)*128];
       char funcName[sizeof(char)*64];
-      unsigned int portnum;
+      unsigned short portnum;
       int argTypes[argTypesSize];
       int nbytes;
 
@@ -226,9 +301,15 @@ class BinderServer {
 
       nbytes = recv(sockfd, funcName, (sizeof(char)*64), 0);
 
-      nbytes = recv(sockfd, argTypes, (len - (sizeof(char)*128) - (sizeof(unsigned short)) - (sizeof(char)*64)), 0);
+      nbytes = recv(sockfd, argTypes, (argTypesSize*4), 0);
 
-      printf("READ: The server registered is: %s\nThe port of server is: %huThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, portnum, funcName, argTypes[0]);
+      printf("The server registered is: %s\nThe port of server is: %u\nThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, portnum, funcName, argTypes[0]);
+
+      //Register with the database
+      int resp = BinderDatabase::getInstance()->addFunc(new Func(funcName, argTypes, argTypesSize),
+                                                        new ServerPortCombo(server_identifier, portnum));
+
+
 
       //TODO:
       // reasons to raise an error/warning:
@@ -255,6 +336,15 @@ class BinderServer {
 
 
 BinderServer* BinderServer::singleton = NULL;
+
+// create a custom mask on the 32 bit integer
+int mask(int start, int finish) {
+  int res = 0; 
+  for (int i = start; i < finish; i++) { 
+    res = res | (1 << i); 
+  } 
+  return res;
+}
 
 int main() {
   // int s, t;
@@ -290,10 +380,51 @@ int main() {
   //   }
   // } 
 
-  // int argTypes[3];
-  // argTypes[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-  // argTypes[1] = (1 << ARG_INPUT)  | (ARG_INT << 16) | 23;
-  // argTypes[2] = 0;
+  int argTypes0[5];
+   argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
+   argTypes0[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
+   argTypes0[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
+   argTypes0[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
+   argTypes0[4] = 0;
+  // printf("Input mask is: %d\n", INPUT_MASK);
+  // printf("Output mask is: %d\n", OUTPUT_MASK);
+  // printf("Type mask is: %x\n", mask(16, 24));
+  // printf("Array mask is: %x\n", mask(0, 16));
+
+
+  int argTypes1[5];
+  argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
+  argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
+  argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
+  argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
+  argTypes1[4] = 0;
+  
+
+  // bool b = 10;
+  // cout << "This bool is true " << b << endl;
+
+  Arg* someArg1 = Arg::parseArg(&argTypes0[3]);
+  Arg* someArg2 = Arg::parseArg(&argTypes0[1]);
+
+
+  // printf("The arg is inp %d\n", someArg->input);
+  // printf("The arg is out %d\n", someArg->output);
+  // printf("The type is: %d\n", someArg->type);
+  // printf("The size of arr: %d\n", someArg->arrSize);
+
+  char hostname[64] = "saiprasad";
+  char derp[64] = "saiprasad";
+  
+  Func* someFunc = new Func(hostname, argTypes0, N_ELEMENTS(argTypes0));
+  cout << "The name of the func is " << someFunc->name << endl;
+  cout << "The size of the args is " << someFunc->arguments.size() << endl;
+  cout << "The first argument is an array " << someFunc->arguments[0]->arrSize << endl;
+  cout << "The second argument is an array " << someFunc->arguments[1]->arrSize << endl;
+
+  cout << "Let's compare the two args " << someArg1->equals(someArg2) << endl;
+
+  Func* otherFunc = new Func(derp, argTypes1, N_ELEMENTS(argTypes1));
+  cout << "Let's compare functions now " << someFunc->equals(otherFunc) << endl;
 
   // printf("argTypes 0 - %d \n argTypes 1 - %d\n", argTypes[0], argTypes[1]);
   // int head[2];
@@ -303,26 +434,28 @@ int main() {
 
   // printf("The size of head is %d\n", len); 
 
-  int sockfd, sockToClientfd;
+
+  // // GOOD CODE
+  int sockfd, sockIncomingFd;
   sockfd = BinderServer::getInstance()->startServer();
 
 
-  sockToClientfd = wait_for_conn(sockfd);
+  sockIncomingFd = wait_for_conn(sockfd);
 
-  int a = 4;
-  int b = 5;
+  // int a = 4;
+  // int b = 5;
 
-  send(sockToClientfd, &a, sizeof(a), 0);
-  send(sockToClientfd, &b, sizeof(b), 0);
+  // send(sockIncomingFd, &a, sizeof(a), 0);
+  // send(sockIncomingFd, &b, sizeof(b), 0);
 
   // int* head = read_head(sockToClientfd);
   // int len = head[0];
   // int type = head[1];
   // printf("Received message (head).. len=%d and type=%d\n", len, type);
 
-  BinderServer::getInstance()->read_message(sockToClientfd);
+  BinderServer::getInstance()->read_message(sockIncomingFd);
 
-  close(sockToClientfd);
+  close(sockIncomingFd);
   close(sockfd);
 
   return 0;
