@@ -2,12 +2,68 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <pthread.h>
 
 #include "rpc.h"
 #include "sck_stream.h"
-#include "message_protocol.h" 
+#include "message_protocol.h"
+#include "utility.h" 
+#include "response_codes.h"
+#include "server_function_skels.h"
 
 using namespace std;
+
+class ServerDatabase {
+  public:
+    vector<Func*> functions;
+    vector<skeleton> skeletons;
+
+    ServerDatabase() {
+      cout << "ServerDatabase :: " << "server db ctr" << endl;
+    }
+    ~ServerDatabase() {
+      cout << "~ServerDatabase :: " << "server db destructor" << endl;
+
+      // clear registered funcs
+      for (vector<Func*>::iterator it = functions.begin() ; it != functions.end(); ++it) {
+        delete *it;
+      }
+      functions.clear();
+
+      // clear skeletons
+      skeletons.clear();
+    }
+
+    // return index of registered function if present; -1 if not present
+    int findRegisteredFunction(Func* func) { //used only internally by the database to register servers so far
+      cout << "findRegisteredFunction :: " << endl;
+      int respCode;
+      if (functions.size() == 0) {
+        cout << "findRegisteredFunction :: " << " No funcs currently registered locally " << endl;
+        return -1; // no function has been registered yet
+      } else {
+        cout << "findRegisteredFunction :: " << "There are " << functions.size() << " funcs registered locally" << endl;
+        for (int i = 0; i < functions.size(); i++) {
+          cout << "findRegisteredFunction :: " << "Name of server reg func " << func->name << endl;
+          cout << "findRegisteredFunction :: " << "Name of func at index: " << i << " is: " << functions[i]->name << endl;
+          respCode = func->equals(functions[i]);
+          if (respCode >= 0) { // exact match or differ by array size for some arg
+            cout << "findRegisteredFunction :: " << " Found func at index: " << i << endl;
+            return i;
+          }
+        }
+      }
+      cout << "findRegisteredFunction :: " << "Func is not registered" << endl;
+      return -1; // if we made it this far then we didn't find the function
+    }
+
+    int addToDB(Func* func, skeleton);
+
+
+};
 
 class ServerProcess {
   // server receives register_failure/success and execute
@@ -166,34 +222,14 @@ int main() {
 
   int binderSockFd = ServerProcess::getInstance()->getBinderSockFd();
 
-  char herp[64] = "herp";
-  int argTypes0[5];
-  argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-  argTypes0[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
-  argTypes0[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
-  argTypes0[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
-  argTypes0[4] = 0;
-
-  char derp[64] = "derp";
-  int argTypes1[5];
-  argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-  argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
-  argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
-  argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
-  argTypes1[4] = 0;
-
-  //send_register(ServerProcess::getInstance()->getBinderSockFd(), SERVER_ADDRESS, SERVER_PORT, herp, argTypes, N_ELEMENTS(argTypes));
-  ServerProcess::getInstance()->registerWithBinder(herp, argTypes0, N_ELEMENTS(argTypes0));
-
-  ServerProcess::getInstance()->read_message(binderSockFd);
-
-  ServerProcess::getInstance()->registerWithBinder(derp, argTypes1, N_ELEMENTS(argTypes0));
-
-  ServerProcess::getInstance()->read_message(binderSockFd);
-
-  ServerProcess::getInstance()->registerWithBinder(derp, argTypes1, N_ELEMENTS(argTypes0));
-
-  ServerProcess::getInstance()->read_message(binderSockFd);
+  int count0 = 3;
+  int argTypes0[count0 + 1];
+  argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16);
+  argTypes0[1] = (1 << ARG_INPUT) | (ARG_INT << 16);
+  argTypes0[2] = (1 << ARG_INPUT) | (ARG_INT << 16);
+  argTypes0[3] = 0;
+ 
+  rpcRegister("f0", argTypes0, *f0_Skel);
 
   return 0;
 }
