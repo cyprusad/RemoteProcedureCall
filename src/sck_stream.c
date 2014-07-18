@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -179,7 +180,7 @@ int setup_server(char port[]) {
 int addrAndPort(int sockfd, char hostname[], unsigned short* port) {
   struct sockaddr_in server;
   int addrlen = sizeof(server);
-  if (getsockname(sockfd, (struct sockaddr *)&server, &addrlen) < 0) {
+  if (getsockname(sockfd, (struct sockaddr *)&server,(socklen_t*) &addrlen) < 0) {
     printf("getsockname error\n");
   } else {
     if (gethostname(hostname, 128) == 0) {

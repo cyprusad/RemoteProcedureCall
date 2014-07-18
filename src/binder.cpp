@@ -14,6 +14,7 @@
 #include <string>
 #include <iostream>
 #include <pthread.h> 
+#include <stdint.h>
 
 #include "rpc.h"
 #include "sck_stream.h"
@@ -260,7 +261,7 @@ class BinderServer {
           sendResp = send_loc_failure(sockfd, cResp->respCode);
         } else {
           char server_id[128];
-          std::strcpy(server_id, cResp->server->name.c_str());
+          strcpy(server_id, cResp->server->name.c_str());
           sendResp = send_loc_success(sockfd, server_id, cResp->server->port);
         }
         return sendResp; //return after sending message to client
@@ -371,7 +372,7 @@ void *threadworker(void* arg)
 {
   printf("TID:0x%x has been spawned\n", pthread_self());
 
-  int sockfd = (int)arg; 
+  intptr_t sockfd = (intptr_t)arg; 
 
   cout << "threadworker :: " << "The sock passed to me is " << sockfd << endl;
 
