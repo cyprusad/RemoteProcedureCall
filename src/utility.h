@@ -9,7 +9,7 @@ class ServerPortCombo {
   public:
     std::string name;
     unsigned short port;
-    int sockfd = -1;
+    int sockfd;
 
     ServerPortCombo(char* n, unsigned short p); 
     ServerPortCombo(char* n, unsigned short p, int s); 

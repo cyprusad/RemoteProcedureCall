@@ -259,7 +259,7 @@ class BinderServer {
           sendResp = send_loc_failure(sockfd, cResp->respCode);
         } else {
           char server_id[128];
-          strcpy(server_id, cResp->server->name.c_str());
+          std::strcpy(server_id, cResp->server->name.c_str());
           sendResp = send_loc_success(sockfd, server_id, cResp->server->port);
         }
         return sendResp; //return after sending message to client

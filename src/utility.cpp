@@ -11,6 +11,7 @@ using namespace std;
 ServerPortCombo::ServerPortCombo(char* n, unsigned short p) {
   name.assign(n);
   port = p;
+  sockfd = -1;
 }
 
 ServerPortCombo::ServerPortCombo(char* n, unsigned short p, int s) {
