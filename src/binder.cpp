@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <vector>
+#include <list>
 #include <string>
 #include <iostream> 
 
@@ -35,6 +36,16 @@ class ServerPortCombo {
     ServerPortCombo(char* n, unsigned int p) {
       name.assign(n);
       port = p;
+    }
+
+    int equals(ServerPortCombo* other) {
+      if (name.compare(other->name) != 0) {
+        return -1;
+      } 
+      if (port != other->port) {
+        return -1;
+      }
+      return 0; // if you made it here, then they're both equal
     }
 };
 
@@ -146,7 +157,7 @@ class BinderDatabase {
   private:
     // for both vectors of funcs and servers, each index denotes matching servers and funcs
     vector<Func*> registeredFunctions;
-    vector< vector<ServerPortCombo*> > registeredServers; 
+    vector< list<ServerPortCombo*> > registeredServers; 
     
     static BinderDatabase* singleton;  
 
@@ -181,25 +192,80 @@ class BinderDatabase {
 
     // go through all the functions and find
     // round robin algorithm if multiple servers can service this client
-    ClientResp* getServerPortComboForFunc(Func func); 
+    ClientResp* getServerPortComboForFunc(Func* func) {
+      cout << "clientResp :: " << "Locating servers whihc serve the func requested " << endl;
+      int index = findRegisteredFunction(func);
+      ClientResp* res;
+      if (index < 0) {
+        cout << "clientResp :: " << "Function is not registered yet" << endl;
+        res = new ClientResp(-1, NULL);
+      } else {
+        // round robin server
+        cout << "clientResp :: " << "Function found in the database in the index " << index << endl;
+        res = new ClientResp(1, findServer(index));
+      }
+      return res;
+    }
 
-    // check if the fun already exists, in which case add to the existing registered servers for that index
-    int addFunc(Func* func, ServerPortCombo* server) {
-      cout << "Func name recv: " << func->name << endl << " Server name recv: " << server->name << endl;
-      int findResult = findRegisteredFunction(func);
-      // NOTE -2 is reserved for case when client wants more space than server but otherwise same
-      if (findResult == -1) { // seeing this function for the first time 
-        registeredFunctions.push_back(func);
-        vector<ServerPortCombo*> circularList;
-        circularList.push_back(server);
-        registeredServers.push_back(circularList);
-      } else { // this 
-        // this might be problematic because we might need a vector of vector pointers
-        // HMMMMM
+    ServerPortCombo* findServer(int index) {
+      if (registeredServers[index].size() == 1) {
+        cout << "findServer :: " << "Only one server registered for this func" << endl;
+        cout << "findServer :: " << "Server selected is: " << registeredServers[index].front()->name << endl;
+        return registeredServers[index].front();
+      } else {
+        cout << "findServer :: " << "Multiple servers registered for this func" << endl;
+        ServerPortCombo* roundRobin = registeredServers[index].front();
+        registeredServers[index].push_back(roundRobin);
+        registeredServers[index].pop_front();
+
+        cout << "findServer :: " << "Server selected is: " << roundRobin->name << endl;
+        cout << "findServer :: " << "Next time this func will be served by " << registeredServers[index].front()->name << endl;
       }
     }
 
+    // check if the func already exists, in which case add to the existing registered servers for that index
+    // NOTE that we need to add new funcs and respective server/ports in a lockstep fashion to get
+    // the nice property that finding the index to func will give the index to the pool of servers
+    // registered to serve that function
+    int addFunc(Func* func, ServerPortCombo* server) {
+      int alreadyPresent = 0; // only gets set when same server tries to register twice
+      cout << "addFunc :: Func name recv: " << func->name << endl << " Server name recv: " << server->name << endl;
+      int findResult = findRegisteredFunction(func);
+      // NOTE -2 is reserved for case when client wants more space than server but otherwise same
+      if (findResult == -1) { // seeing this function for the first time 
+        cout << "addFunc :: " << "This is a NEW func" << endl;
+        registeredFunctions.push_back(func);
+        list<ServerPortCombo*> circularList;
+        circularList.push_back(server);
+        registeredServers.push_back(circularList); // adds in lockstep
 
+        // TODO make some kind of assert to see if the addition did happen in lockstep
+      } else { // also support function overloading - same server registers same function multiple times
+
+        for (list<ServerPortCombo*>::iterator it=registeredServers[findResult].begin(); it != registeredServers[findResult].end(); ++it) {
+          if (server->equals(*it) == 0) {
+            alreadyPresent = 1;
+            cout << "addFunc :: " << "This server has already registered this func" << endl;
+            break; // server is already registered with binder for this function (doing it twice)
+          }
+        }
+        // for (int i = 0; i < registeredServers[findResult].size(); i++) {
+        //   if (server->equals(registeredServers[findResult][i]) == 0) {
+        //     alreadyPresent = 1;
+        //     cout << "addFunc :: " << "This server has already registered this func" << endl;
+        //     break; // server is already registered with binder for this function (doing it twice)
+        //   }
+        // }
+        if (alreadyPresent == 0) { //same server is NOT registered for this func
+          registeredServers[findResult].push_back(server); // add new server registered for same function
+          cout << "addFunc :: " << "The number of servers registered for same func are: " << registeredServers[findResult].size() << endl;
+        }
+      }
+
+      cout << "addFunc :: " << "The size of reg funcs " << registeredFunctions.size() << endl;
+      cout << "addFunc :: " << "Thse size of reg servers " << registeredServers.size() << endl;
+      return alreadyPresent; // this can be used as a warning code/error code for the server trying to register twice for same func
+    }
 };
 
 BinderDatabase* BinderDatabase::singleton = NULL;
