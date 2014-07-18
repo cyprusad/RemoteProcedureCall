@@ -12,7 +12,6 @@
 #include "message_protocol.h"
 #include "utility.h" 
 #include "response_codes.h"
-#include "server_function_skels.h"
 
 using namespace std;
 
@@ -229,7 +228,7 @@ int main() {
   argTypes0[2] = (1 << ARG_INPUT) | (ARG_INT << 16);
   argTypes0[3] = 0;
  
-  rpcRegister("f0", argTypes0, *f0_Skel);
+  // rpcRegister("f0", argTypes0, *f0_Skel);
 
   return 0;
 }
