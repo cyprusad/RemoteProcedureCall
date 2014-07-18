@@ -15,7 +15,7 @@
 #include "rpc.h"
 #include "sck_stream.h"
 #include "message_protocol.h"
-#include "utility.h";
+#include "utility.h"
 #include "response_codes.h"
 
 using namespace std;
