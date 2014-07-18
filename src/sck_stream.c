@@ -388,8 +388,20 @@ int send_execute_failure(int sockfd, int reasonCode) {
   return 0;
 }
 
-int send_loc_success(int sockfd, char hostname[], int port) {
-  // have a fixed size for hostname say something like 128 bytes (chars) and 4 bytes for port
+int send_loc_success(int sockfd, char hostname[], unsigned short port) {
+  int head[2];
+  head[0] = (sizeof(char)*128) + sizeof(unsigned short);
+  head[1] = RPC_LOC_SUCCESS;
+ 
+  int bytesSent;
+
+  bytesSent = send(sockfd, head, sizeof(head), 0);
+
+  bytesSent = send(sockfd, hostname, (sizeof(char)*128), 0);
+
+  bytesSent = send(sockfd, &port, sizeof(unsigned short), 0);
+
+  return 0;
 
 }
 

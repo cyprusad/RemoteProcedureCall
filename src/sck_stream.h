@@ -18,7 +18,9 @@ extern int setup_server(char port[]);
 extern int wait_for_conn(int sockfd); 
 
 // messages sent by client
-extern int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes);
+extern int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes); //to binder
+
+extern int send_execute(int sockfd, char hostname[], int argTypes[], int sizeOfArgTypes, void** args, int sizeOfArgs); //to server
 
 extern int send_terminate(int sockfd); // to binder
 
@@ -33,6 +35,8 @@ extern int send_loc_failure(int sockfd, int reasonCode); // to client
 
 // messages sent by server
 extern int send_register(int sockfd, char server_identifier[], unsigned short port, char funcName[], int argTypes[], int sizeOfArgTypes); //to binder
+
+extern int send_execute_success(int sockfd, char funcName[], int argTypes[],  int sizeOfArgTypes, void** args, int sizeOfArgs); //to client
 
 extern int send_execute_failure(int sockfd, int reasonCode); // to client
 

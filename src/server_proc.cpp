@@ -79,7 +79,7 @@ class ServerProcess {
           break;
         default:
           // invalid message type -- raise error of some sort
-          invalid_message(sockfd);
+          invalid_message();
       }
     }
 
@@ -111,7 +111,7 @@ class ServerProcess {
 
     int terminate(); // TODO terminate server after verifying msg from binder
 
-    int invalid_message(int sockfd) {
+    int invalid_message() {
       printf("Invalid message\n");
       return 0; //or some warning
     }

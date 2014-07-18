@@ -365,12 +365,12 @@ class BinderServer {
           break;
         default:
           // invalid message type -- raise error of some sort
-          resp = invalid_message(sockfd);
+          resp = invalid_message();
       }
 
       // test destructor
-      cout << "readMessage :: " << "Calling DB destructor" << endl;
-      delete BinderDatabase::getInstance();
+      // cout << "readMessage :: " << "Calling DB destructor" << endl;
+      // delete BinderDatabase::getInstance();
 
       //TODO -- based on the response received, act.
 
@@ -446,7 +446,7 @@ class BinderServer {
       return 0;
     }
 
-    int invalid_message(int sockfd) {
+    int invalid_message() {
       printf("Invalid message\n");
       return 0; //or some warning
     }
