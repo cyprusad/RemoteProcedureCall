@@ -38,6 +38,10 @@ class ServerPortCombo {
       port = p;
     }
 
+    ~ServerPortCombo() {
+      cout << "~ServerPortCombo :: " << "server/port destructor" << endl;
+    }
+
     int equals(ServerPortCombo* other) {
       if (name.compare(other->name) != 0) {
         return -1;
@@ -59,6 +63,10 @@ class ClientResp {
       respCode = res;
       server = s;
     }
+
+    ~ClientResp() {
+      cout << "~ClientResp :: " << "client resp destructor" << endl;
+    }
 };
 
 class Arg {
@@ -73,6 +81,10 @@ class Arg {
       output = out;
       type = t;
       arrSize = arr_size;
+    }
+
+    ~Arg() {
+      cout << "~Arg :: " << "arg destructor -- bottom of the stack" << endl;
     }
 
     // just checks the equality of argument signatures
@@ -126,6 +138,14 @@ class Func {
       }
     }
 
+    ~Func() {
+      cout << "~Func :: " << "Func destructor for funcName = " << name << endl;
+      for (vector<Arg*>::iterator it = arguments.begin() ; it != arguments.end(); ++it) {
+        delete *it;
+      }
+      arguments.clear();
+    }
+
     int equals(Func* other) {
       int warningFlag = 0;
       if (name.compare(other->name) != 0) {
@@ -170,8 +190,22 @@ class BinderDatabase {
     }
 
     ~BinderDatabase() {
-      // clean all func and arg objects stored
+      cout << "~BinderDatabase :: " << "binder db destructor" << endl;
 
+      // clear registered funcs
+      for (vector<Func*>::iterator it = registeredFunctions.begin() ; it != registeredFunctions.end(); ++it) {
+        delete *it;
+      }
+      registeredFunctions.clear();
+
+      // clear registered servers
+      for (int i = 0; i < registeredServers.size(); i++) {
+        for (list<ServerPortCombo*>::iterator it = registeredServers[i].begin() ; it != registeredServers[i].end(); ++it) {
+          delete *it;
+        }
+        registeredServers[i].clear();
+      }
+      registeredServers.clear();
     }
     // return index of registered function if present; -1 if not present
     //TODO if we are going to use this func for the client as well then do something about client/server array size
@@ -193,7 +227,7 @@ class BinderDatabase {
     // go through all the functions and find
     // round robin algorithm if multiple servers can service this client
     ClientResp* getServerPortComboForFunc(Func* func) {
-      cout << "clientResp :: " << "Locating servers whihc serve the func requested " << endl;
+      cout << "clientResp :: " << "Locating servers which serve the func requested " << endl;
       int index = findRegisteredFunction(func);
       ClientResp* res;
       if (index < 0) {
@@ -287,6 +321,10 @@ class BinderServer {
       return singleton;
     }
 
+    ~BinderServer() {
+      delete BinderDatabase::getInstance();
+    }
+
     int startServer() {
       sockSelfFd = setup_server("0");
 
@@ -303,6 +341,7 @@ class BinderServer {
 
     // blocking full message read - spawned on a different thread on accepting
     int read_message(int sockfd) {
+      int resp;
       int* head = read_head(sockfd); // don't think we need to clean this up
       int len = head[0];
       int type = head[1];
@@ -310,22 +349,30 @@ class BinderServer {
       switch(type) {
         case RPC_TERMINATE:
           // add to queue of messages to be processed (graceful termination)
-          terminate();
+          resp = terminate();
           break;
         case RPC_LOC_REQUEST:
-          // read additional message
-          read_loc_request(sockfd, len);
+          resp = read_loc_request(sockfd, len);
+          //based on resp either exit/send a adequate response back
+
           // add to queue of messages to be processed
           break;
         case RPC_REGISTER:
-          // read additional content of the message
-          read_register(sockfd, len);
+          resp = read_register(sockfd, len);
+          //based on resp either exit/send a adequate response back
+
           // add to queue of messages to be processed
           break;
         default:
           // invalid message type -- raise error of some sort
-          invalid_message(sockfd);
+          resp = invalid_message(sockfd);
       }
+
+      // test destructor
+      cout << "readMessage :: " << "Calling DB destructor" << endl;
+      delete BinderDatabase::getInstance();
+
+      //TODO -- based on the response received, act.
 
       return 0;
     }
@@ -352,6 +399,7 @@ class BinderServer {
         //send location failure to the client
       }
 
+      // TODO call destructor of ClientResp when done sending the LOC_SUCCESS/LOC_FAILURE message
       return 0;
     }
 
@@ -529,6 +577,7 @@ int main() {
 
   close(sockIncomingFd);
   close(sockfd);
+
 
   return 0;
 
