@@ -237,10 +237,10 @@ int call_sock(char hostname[], char port[]) {
         }
 
         if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(sockfd);
             perror("client: connect");
             continue;
         }
+        close(sockfd);
 
         break;
     }
