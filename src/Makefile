@@ -1,7 +1,7 @@
 default: librpc.a binder
 
 binder.o:
-	g++ -c rpc.h sck_stream.h utility.hpp message_protol.h response_codes.h binder.cpp
+	g++ -c rpc.h sck_stream.h utility.hpp message_protocol.h response_codes.h binder.cpp
 
 sck_stream.o:
 	g++ -c sck_stream.h message_protocol.h response_codes.h sck_stream.cpp
@@ -9,7 +9,7 @@ sck_stream.o:
 utility.o:
 	g++ -c message_protocol.h utility.hpp utility.cpp
 
-binder: sck_stream.o utility.o binder.o libpthread.a
+binder: sck_stream.o utility.o binder.o 
 	g++ -L. sck_stream.o utility.o binder.o -lpthread -o binder
 
 client_proc.o: 

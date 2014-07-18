@@ -1,10 +1,8 @@
-#include <vector>
 #include <list>
-#include <string>
 #include <iostream>
 
 #include "message_protocol.h"
-#include "utility.h"
+#include "utility.hpp"
 
 using namespace std;
 

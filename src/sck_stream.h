@@ -29,7 +29,7 @@ extern int send_register_success(int sockfd, int warningFlag); // to server
 
 extern int send_register_failure(int sockfd, int reasonCode); // to server
 
-extern int send_loc_success(int sockfd, char hostname[], int port); // to client
+extern int send_loc_success(int sockfd, char hostname[], unsigned short port); // to client
 
 extern int send_loc_failure(int sockfd, int reasonCode); // to client
 

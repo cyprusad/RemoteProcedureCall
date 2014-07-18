@@ -1,15 +1,12 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <string>
 #include <vector>
-#define NTHREADS 100
 
+#define NTHREADS 100
+using namespace std;
 // always unique
 class ServerPortCombo {
   public:
-    std::string name;
+    string name;
     unsigned short port;
     int sockfd;
 
@@ -50,8 +47,8 @@ class Arg {
 
 class Func {
   public:
-    std::string name;
-    std::vector<Arg*> arguments;
+    string name;
+    vector<Arg*> arguments;
 
     Func(char* funcName, int argTypes[], int sizeOfArgTypes); 
 
@@ -59,10 +56,3 @@ class Func {
 
     int equals(Func* other); 
 };
-
- 
-
-
-#ifdef __cplusplus
-}
-#endif
