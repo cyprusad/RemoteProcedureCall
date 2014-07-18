@@ -1,7 +1,7 @@
 default: librpc.a binder
 
 binder:
-	g++ -x c sck_stream.c -x c++ utility.cpp -x c++ binder.cpp -o binder
+	g++ -x c sck_stream.c -x c++ utility.cpp -x c++ binder.cpp  -lpthread -o binder
 
 client_proc.o:
 	g++ -x c sck_stream.c -x c++ utility.cpp -x c++ client_proc.cpp -o client_proc.o
