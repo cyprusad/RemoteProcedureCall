@@ -11,158 +11,23 @@
 #include <vector>
 #include <list>
 #include <string>
-#include <iostream> 
+#include <iostream>
+#include <pthread.h> 
 
 #include "rpc.h"
 #include "sck_stream.h"
 #include "message_protocol.h" 
 #include "utility.h"
+#include "response_codes.h"
+
+#define NTHREADS 100
 
 using namespace std;
 
-// TODO move to separate header
+pthread_t threadid[NTHREADS]; // Thread pool
+pthread_mutex_t lck;
+int isTerminate = 0; // set to 1 when terminate is called
 
-// // always unique
-// class ServerPortCombo {
-//   public:
-//     string name;
-//     unsigned short port;
-
-//     ServerPortCombo(char* n, unsigned int p) {
-//       name.assign(n);
-//       port = p;
-//     }
-
-//     ~ServerPortCombo() {
-//       cout << "~ServerPortCombo :: " << "server/port destructor" << endl;
-//     }
-
-//     int equals(ServerPortCombo* other) {
-//       if (name.compare(other->name) != 0) {
-//         return -1;
-//       } 
-//       if (port != other->port) {
-//         return -1;
-//       }
-//       return 0; // if you made it here, then they're both equal
-//     }
-// };
-
-// class ClientResp {
-//   public:
-//     int respCode;
-//     ServerPortCombo* server;
-
-//     // -1 response would mean that no such function is registered with the binder; anything else will give the server/port
-//     ClientResp(int res, ServerPortCombo* s) {
-//       respCode = res;
-//       server = s;
-//     }
-
-//     ~ClientResp() {
-//       cout << "~ClientResp :: " << "client resp destructor" << endl;
-//     }
-// };
-
-// class Arg {
-//   public:
-//     bool input;
-//     bool output;
-//     int type;
-//     int arrSize;
-
-//     Arg(bool in, bool out, int t, int arr_size) {
-//       input = in;
-//       output = out;
-//       type = t;
-//       arrSize = arr_size;
-//     }
-
-//     ~Arg() {
-//       cout << "~Arg :: " << "arg destructor -- bottom of the stack" << endl;
-//     }
-
-//     // just checks the equality of argument signatures
-//     int equals(Arg* other) {
-//       if (input != other->input) {
-//         return -1;
-//       } else if (output != other->output) {
-//         return -1;
-//       } else if (type != other->type) {
-//         return -1;
-//       } else { // checked first three members, only array sizes remain
-//         if (arrSize == 0) { // client method is a scalar
-//           if (other->arrSize > 0) {
-//             return -1; // registered method has array
-//           } 
-//         } else if(other->arrSize == 0) {
-//           if (arrSize > 0) {
-//             return -1; // we are an array but the registered method is a scalar
-//           } 
-//         } else {
-//           if (arrSize > other->arrSize) {
-//             return 2; // some kind of warning saying that the client array is greater than the max the server would like to allocate
-//           } 
-//         }
-//       }
-//       return 0; // if you made it this far, you are okay
-//     }
-
-//     // ensure that the arg is not zero!
-//     static Arg* parseArg(int* arg) {
-//       return new Arg((*arg & INPUT_MASK) >> ARG_INPUT, 
-//                      (*arg & OUTPUT_MASK) >> ARG_OUTPUT, 
-//                      (*arg & TYPE_MASK) >> 16,
-//                      (*arg & ARRAY_MASK));
-//     }
-// }; 
-
-// class Func {
-//   public:
-//     string name;
-//     vector<Arg*> arguments;
-
-//     Func(char* funcName, int argTypes[], int sizeOfArgTypes) {
-//       name.assign(funcName);
-//       arguments.reserve(sizeOfArgTypes - 1);
-
-//       int* iterator = argTypes;
-//       while(*iterator != 0) {
-//         arguments.push_back(Arg::parseArg(iterator));
-//         iterator++; 
-//       }
-//     }
-
-//     ~Func() {
-//       cout << "~Func :: " << "Func destructor for funcName = " << name << endl;
-//       for (vector<Arg*>::iterator it = arguments.begin() ; it != arguments.end(); ++it) {
-//         delete *it;
-//       }
-//       arguments.clear();
-//     }
-
-//     int equals(Func* other) {
-//       int warningFlag = 0;
-//       if (name.compare(other->name) != 0) {
-//         return -1;
-//       } 
-//       if (arguments.size() != other->arguments.size()) {
-//         return -1;
-//       } else {
-//         for (int i = 0; i < arguments.size(); i++) {
-//           if (arguments[i]->equals(other->arguments[i]) < 0) { // one of the arguments don't match 
-//             return -1;
-//           } else if (arguments[i]->equals(other->arguments[i]) > 0) {
-//             warningFlag = arguments[i]->equals(other->arguments[i]); // generated warning flag
-//           }
-//         }
-//         if (warningFlag != 0) {
-//           return warningFlag; // all the arguments and func names match, but client is requesting larger array than server wants to allocate
-//         }
-//       }
-//       return 0;
-//     }
-// };
 
 // search, look up and conflict resolution done here
 // also make it thread safe
@@ -174,16 +39,12 @@ class BinderDatabase {
     vector<Func*> registeredFunctions;
     vector< list<ServerPortCombo*> > registeredServers; 
     
-    static BinderDatabase* singleton;  
-
   public:
-    static BinderDatabase* getInstance() {
-      if (singleton == 0) {
-        singleton = new BinderDatabase();
-      }
-      return singleton;
-    }
+    vector<ServerPortCombo*> uniqueServers;
 
+    BinderDatabase() {
+      cout << "BinderDatabase :: " << "binder db ctr" << endl;
+    }
     ~BinderDatabase() {
       cout << "~BinderDatabase :: " << "binder db destructor" << endl;
 
@@ -193,11 +54,14 @@ class BinderDatabase {
       }
       registeredFunctions.clear();
 
+      // clear unique servers
+      for (vector<ServerPortCombo*>::iterator it = uniqueServers.begin() ; it != uniqueServers.end(); ++it) {
+        delete *it;
+      }
+      uniqueServers.clear();
+
       // clear registered servers
       for (int i = 0; i < registeredServers.size(); i++) {
-        for (list<ServerPortCombo*>::iterator it = registeredServers[i].begin() ; it != registeredServers[i].end(); ++it) {
-          delete *it;
-        }
         registeredServers[i].clear();
       }
       registeredServers.clear();
@@ -205,17 +69,24 @@ class BinderDatabase {
     // return index of registered function if present; -1 if not present
     //TODO if we are going to use this func for the client as well then do something about client/server array size
     int findRegisteredFunction(Func* func) { //used only internally by the database to register servers so far
+      cout << "findRegisteredFunction :: " << endl;
       int respCode;
       if (registeredFunctions.size() == 0) {
+        cout << "findRegisteredFunction :: " << " No funcs currently registered " << endl;
         return -1; // no function has been registered yet
       } else {
+        cout << "findRegisteredFunction :: " << "There are " << registeredFunctions.size() << " funcs registered" << endl;
         for (int i = 0; i < registeredFunctions.size(); i++) {
+          cout << "findRegisteredFunction :: " << "Name of server reg func " << func->name << endl;
+          cout << "findRegisteredFunction :: " << "Name of func at index: " << i << " is: " << registeredFunctions[i]->name << endl;
           respCode = func->equals(registeredFunctions[i]);
-          if (respCode == 0 || respCode == 2) { // exact match or differ by array size for some arg
+          if (respCode >= 0) { // exact match or differ by array size for some arg
+            cout << "findRegisteredFunction :: " << " Found func at index: " << i << endl;
             return i;
           }
         }
       }
+      cout << "findRegisteredFunction :: " << "Func is not registered" << endl;
       return -1; // if we made it this far then we didn't find the function
     }
 
@@ -233,9 +104,10 @@ class BinderDatabase {
         cout << "clientResp :: " << "Function found in the database in the index " << index << endl;
         res = new ClientResp(1, findServer(index));
       }
-      return res;
+      return res; //release this when sending the message back to client
     }
 
+    // reference to server/port object is managed by the database
     ServerPortCombo* findServer(int index) {
       if (registeredServers[index].size() == 1) {
         cout << "findServer :: " << "Only one server registered for this func" << endl;
@@ -252,15 +124,35 @@ class BinderDatabase {
       }
     }
 
+    ServerPortCombo* fetchUniqueServer(char hostname[], unsigned short port, int sock) {
+      cout << "fetchUniqueServer :: " << endl;
+      ServerPortCombo* temp = new ServerPortCombo(hostname, port, sock);
+      if (uniqueServers.size() == 0) {
+        cout << "fetchUniqueServer :: " << "No servers currently in the DB" << endl;
+        uniqueServers.push_back(temp);
+        return temp;
+      } else {
+        cout << "fetchUniqueServer :: " << uniqueServers.size() << " servers currently registered "<< endl;
+        for (int i = 0; i < uniqueServers.size(); i++) {
+          if (temp->equals(uniqueServers[i]) == 0) {
+            delete temp;
+            return uniqueServers[i];
+          }
+        }
+      }
+      return temp;
+    }
+
     // check if the func already exists, in which case add to the existing registered servers for that index
     // NOTE that we need to add new funcs and respective server/ports in a lockstep fashion to get
     // the nice property that finding the index to func will give the index to the pool of servers
     // registered to serve that function
     int addFunc(Func* func, ServerPortCombo* server) {
-      int alreadyPresent = 0; // only gets set when same server tries to register twice
-      cout << "addFunc :: Func name recv: " << func->name << endl << " Server name recv: " << server->name << endl;
-      int findResult = findRegisteredFunction(func);
-      // NOTE -2 is reserved for case when client wants more space than server but otherwise same
+      int resp;
+      cout << "addFunc :: Func name recv: " << func->name << " @ " << server->name << ":" << server->port << endl;
+      
+      int findResult = findRegisteredFunction(func); // returns the index of function
+
       if (findResult == -1) { // seeing this function for the first time 
         cout << "addFunc :: " << "This is a NEW func" << endl;
         registeredFunctions.push_back(func);
@@ -268,30 +160,33 @@ class BinderDatabase {
         circularList.push_back(server);
         registeredServers.push_back(circularList); // adds in lockstep
 
+        resp = BD_NEW_FUNC_REGISTERED;
         // TODO make some kind of assert to see if the addition did happen in lockstep
       } else { // also support function overloading - same server registers same function multiple times
+        delete func; // exact same funciton already exists at index=findResult so delete the func created for addition
 
         for (list<ServerPortCombo*>::iterator it=registeredServers[findResult].begin(); it != registeredServers[findResult].end(); ++it) {
           if (server->equals(*it) == 0) {
-            alreadyPresent = 1;
             cout << "addFunc :: " << "This server has already registered this func" << endl;
-            break; // server is already registered with binder for this function (doing it twice)
+            resp = BD_DUPL_FUNC_FOR_SERVER;
+            return resp;
           }
         }
-     
-        if (alreadyPresent == 0) { //same server is NOT registered for this func
-          registeredServers[findResult].push_back(server); // add new server registered for same function
-          cout << "addFunc :: " << "The number of servers registered for same func are: " << registeredServers[findResult].size() << endl;
-        }
+       
+        registeredServers[findResult].push_back(server); // add new server registered for same function
+        cout << "addFunc :: " << "The number of servers registered for same func are: " << registeredServers[findResult].size() << endl;
+        resp = BD_NEW_SERVER_FOR_FUNC;
+        
       }
 
+      // sanity check
       cout << "addFunc :: " << "The size of reg funcs " << registeredFunctions.size() << endl;
       cout << "addFunc :: " << "Thse size of reg servers " << registeredServers.size() << endl;
-      return alreadyPresent; // this can be used as a warning code/error code for the server trying to register twice for same func
+      
+      return resp; // (100,101,102)
     }
 };
 
-BinderDatabase* BinderDatabase::singleton = NULL;
 
 class BinderServer {
   // binder server receives loc_requests, register and terminate
@@ -302,22 +197,25 @@ class BinderServer {
     char selfAddress[128];
     unsigned short selfPort;
 
+    BinderDatabase* db;
     static BinderServer* singleton;
 
   protected:
-    //BinderServer();
+    BinderServer() {
+      db = new BinderDatabase();
+    }
 
   public:
 
     static BinderServer* getInstance() {
       if (singleton == 0) {
-        singleton = new BinderServer;
+        singleton = new BinderServer();
       }
       return singleton;
     }
 
     ~BinderServer() {
-      delete BinderDatabase::getInstance();
+      delete db;
     }
 
     int startServer() {
@@ -328,51 +226,60 @@ class BinderServer {
         printf("BINDER_ADDRESS %s\n", selfAddress);
         printf("BINDER_PORT    %hu\n", selfPort);
       } else {
-        printf("warning[0]: binder doesn't know its hostname/port; possible that binder didn't start properly");
+        printf("warning[0]: binder doesn't know its hostname/port; possible that binder didn't start properly\n");
       }
 
       return sockSelfFd; //TODO error checking here
     }
 
-    // blocking full message read - spawned on a different thread on accepting
-    int read_message(int sockfd) {
-      int resp;
+    // blocking full message read and response - spawned on a different thread on accepting
+    int read_message_and_respond(int sockfd) {
+      int readResp = -1;
+      int sendResp = -1;
+      ClientResp* cResp = NULL;
       int* head = read_head(sockfd); // don't think we need to clean this up
       int len = head[0];
       int type = head[1];
 
       switch(type) {
         case RPC_TERMINATE:
-          // add to queue of messages to be processed (graceful termination)
-          resp = terminate();
+          sendResp = terminate();
           break;
         case RPC_LOC_REQUEST:
-          resp = read_loc_request(sockfd, len);
-          //based on resp either exit/send a adequate response back
-
-          // add to queue of messages to be processed
+          cResp = read_loc_request(sockfd, len);
           break;
         case RPC_REGISTER:
-          resp = read_register(sockfd, len);
-          //based on resp either exit/send a adequate response back
-
-          // add to queue of messages to be processed
+          readResp = read_register(sockfd, len);
           break;
         default:
-          // invalid message type -- raise error of some sort
-          resp = invalid_message();
+          readResp = INVALID_MESSAGE;
       }
 
-      // test destructor
-      // cout << "readMessage :: " << "Calling DB destructor" << endl;
-      // delete BinderDatabase::getInstance();
+      // the read message was a RPC_LOC_REQUEST
+      if (cResp != NULL) {
+        if (cResp->respCode < 0) {
+          sendResp = send_loc_failure(sockfd, cResp->respCode);
+        } else {
+          char server_id[128];
+          strcpy(server_id, cResp->server->name.c_str());
+          sendResp = send_loc_success(sockfd, server_id, cResp->server->port);
+        }
+        return sendResp; //return after sending message to client
+      }
 
-      //TODO -- based on the response received, act.
+      if (readResp == BD_DUPL_FUNC_FOR_SERVER) {
+        sendResp = send_register_failure(sockfd, readResp); // note that this socket is connected to server keep it alive
+      }
 
-      return 0;
+      if (readResp == BD_NEW_FUNC_REGISTERED || readResp == BD_NEW_SERVER_FOR_FUNC) {
+        sendResp = send_register_success(sockfd, readResp); // note that this socket is connected to server keep it alive
+      }
+
+      return sendResp;
     }
 
-    int read_loc_request(int sockfd, int len) {
+    ClientResp* read_loc_request(int sockfd, int len) {
+      ClientResp* resp;
       int argTypesSize = (len - (sizeof(char)*64))/4;
       char funcName[sizeof(char)*64];
       int argTypes[argTypesSize];
@@ -382,23 +289,25 @@ class BinderServer {
 
       nbytes = recv(sockfd, argTypes, (len - (sizeof(char)*64)), 0);
 
-      printf("The func name read is: %s\nThe last elem of argTypes is: %d\n", funcName, argTypes[4]);
+      printf("The func name read is: %s\nThe first elem of argTypes is: %d\n", funcName, argTypes[0]);
 
 
       // this should be in a critical section
-      ClientResp* resp = BinderDatabase::getInstance()->getServerPortComboForFunc(new Func(funcName, argTypes, argTypesSize));
+      Func* queryFunc = new Func(funcName, argTypes, argTypesSize);
 
-      if (resp->respCode < 0) {
-        // we DONT have a server that will process the request for us
+      //critical section -- get location of server
+      pthread_mutex_lock (&lck);
+      resp = db->getServerPortComboForFunc(queryFunc);
+      pthread_mutex_unlock (&lck);
 
-        //send location failure to the client
-      }
+      delete queryFunc;
 
-      // TODO call destructor of ClientResp when done sending the LOC_SUCCESS/LOC_FAILURE message
-      return 0;
+      return resp;
     }
 
     int read_register(int sockfd, int len) {
+      ServerPortCombo* uniqueServer;
+      Func* toAdd;
       printf("READ:\nReading a total of %d bytes\n", len);
 
       int argTypesSize = (len - (sizeof(char)*128) - sizeof(unsigned short) - (sizeof(char)*64))/4; // subtract the size of hostname, portnum, funcName
@@ -407,6 +316,7 @@ class BinderServer {
       unsigned short portnum;
       int argTypes[argTypesSize];
       int nbytes;
+      int respAddFunc;
 
       nbytes = recv(sockfd, server_identifier, (sizeof(char)*128), 0);
 
@@ -416,163 +326,106 @@ class BinderServer {
 
       nbytes = recv(sockfd, argTypes, (argTypesSize*4), 0);
 
-      printf("The server registered is: %s\nThe port of server is: %u\nThe func name is: %s\nThe first elem of argTypes is: %d\n", server_identifier, portnum, funcName, argTypes[0]);
+      printf("READ: Thesize of arg types %d\nThe server registered is: %s\nThe port of server is: %u\nThe func name is: %s\nThe first elem of argTypes is: %d\n",argTypesSize, server_identifier, portnum, funcName, argTypes[0]);
 
-      //Register with the database
-      int resp = BinderDatabase::getInstance()->addFunc(new Func(funcName, argTypes, argTypesSize),
-                                                        new ServerPortCombo(server_identifier, portnum));
+      pthread_mutex_lock (&lck);
+      uniqueServer = db->fetchUniqueServer(server_identifier, portnum, sockfd);
+      pthread_mutex_lock (&lck);
 
-      if (resp < 0) {
-        // registration was NOT successful, send registration failure
-      }
+      toAdd = new Func(funcName, argTypes, argTypesSize);
 
+      pthread_mutex_lock (&lck);
+      respAddFunc = db->addFunc(toAdd, uniqueServer);
+      pthread_mutex_unlock (&lck);
+    
       //TODO:
       // reasons to raise an error/warning:
       // - while reading data from server, the socket closed for some reason
       // - the registereing of func fails
       // - the binder crashes or something else bad happens
-      return 0;
+      return respAddFunc; //(100/101/102 or something bad happened with the socket reading)
     }
 
     int terminate(){
-      // terminate all the servers
+      int sockfd, sendResp;
+      for (int i = 0; i < db->uniqueServers.size(); i++) {
+        sockfd = db->uniqueServers[i]->sockfd; // this probably a bad idea
+        sendResp = send_terminate(sockfd);
+      }
 
-      // terminate self - shut off the sockets and clean up memory used
-      return 0;
+      pthread_mutex_lock (&lck);
+      isTerminate = 1;
+      pthread_mutex_unlock (&lck);
+
+      // if the send happened successfully then 
+      return BS_SUCC_SEND_TERM_SERVER ;
     }
-
-    int invalid_message() {
-      printf("Invalid message\n");
-      return 0; //or some warning
-    }
-
 
 };
 
 
 BinderServer* BinderServer::singleton = NULL;
 
-// create a custom mask on the 32 bit integer
-int mask(int start, int finish) {
-  int res = 0; 
-  for (int i = start; i < finish; i++) { 
-    res = res | (1 << i); 
-  } 
-  return res;
+
+void *threadworker(void* arg)
+{
+  printf("TID:0x%x has been spawned\n", pthread_self());
+
+  int sockfd = (int)arg; 
+
+  cout << "threadworker :: " << "The sock passed to me is " << sockfd << endl;
+
+  //TODO The resp should uniquely tell if the read message was register/location and what happened 
+  int resp = BinderServer::getInstance()->read_message_and_respond(sockfd); // Blocks until there is something to be read in the socket
+
+  while (resp == BS_SUCC_SEND_SERVER) { // check if server socket .. or not closed
+    resp = BinderServer::getInstance()->read_message_and_respond(sockfd); // keep reading register calls from the server
+  }
+
+  // if we are here, it means that this was a client socket.. so close it
+  printf("TID:0x%x is done processing: either client is served or the server hung up\n", pthread_self());
+  close(sockfd);
+  pthread_exit(0);
 }
 
+
 int main() {
-  // int s, t;
+  int sockSelfFd, sockIncomingFd;
+  int terminate;
 
-  // if ((s= establish(PORTNUM, 1)) < 0) {  /* binder is calling to establish a listening socket */
-  //   perror("establish");
-  //   exit(1);
-  // }
+  // This will initialize the singleton server and database and we are still in single thread mode
+  sockSelfFd = BinderServer::getInstance()->startServer();
 
-  // //printf("Binder started loopin'\n");
-  // //signal(SIGCHLD, fireman);           /* this eliminates zombies */
+  pthread_attr_t attr; // Thread attribute
+  int i; // Thread iterator
 
-  // for (;;) {                          /* loop for phone calls */
-  //   if ((t= get_connection(s)) < 0) { /* get a connection */
-  //     if (errno == EINTR)             /* EINTR might happen on accept(), */
-  //       continue;                     /* try again */
-  //     perror("accept");               /* bad */
-  //     exit(1);
-  //   }
-  //   switch(fork()) {                  /* try to handle connection */
-  //   case -1 :                         /* bad news.  scream and die */
-  //     perror("fork");
-  //     close(s);
-  //     close(t);
-  //     exit(1);
-  //   case 0 :                          /* we're the child, do something */
-  //     close(s);
-  //     //work(t);
-  //     exit(0);
-  //   default :                         /* we're the parent so look for */
-  //     close(t);                       /* another connection */
-  //     continue;
-  //   }
-  // } 
-
-  int argTypes0[5];
-   argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-   argTypes0[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
-   argTypes0[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
-   argTypes0[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
-   argTypes0[4] = 0;
-  // printf("Input mask is: %d\n", INPUT_MASK);
-  // printf("Output mask is: %d\n", OUTPUT_MASK);
-  // printf("Type mask is: %x\n", mask(16, 24));
-  // printf("Array mask is: %x\n", mask(0, 16));
-
-
-  int argTypes1[5];
-  argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-  argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
-  argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
-  argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
-  argTypes1[4] = 0;
+  pthread_attr_init(&attr); // Creating thread attributes
+  pthread_attr_setschedpolicy(&attr, SCHED_FIFO); // FIFO scheduling for threads 
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); // Don't want threads (particualrly main)
   
+                                                                
+  i = 0;
+  while (1) {
+     if (i == NTHREADS) // So that we don't access a thread out of bounds of the thread pool
+     {
+       i = 0;
+     }
 
-  // bool b = 10;
-  // cout << "This bool is true " << b << endl;
+     sockIncomingFd = wait_for_conn(sockSelfFd);
 
-  Arg* someArg1 = new Arg(&argTypes0[3]);
-  Arg* someArg2 = new Arg(&argTypes0[1]);
+     cout << "main thread :: " << "The sock accepted is " << sockIncomingFd << endl;
 
+     pthread_mutex_lock (&lck);
+     terminate = isTerminate;
+     pthread_mutex_unlock (&lck);
 
-  // printf("The arg is inp %d\n", someArg->input);
-  // printf("The arg is out %d\n", someArg->output);
-  // printf("The type is: %d\n", someArg->type);
-  // printf("The size of arr: %d\n", someArg->arrSize);
+     if (terminate != 0) {
+      break;
+     }
 
-  char hostname[64] = "saiprasad";
-  char derp[64] = "saiprasad";
-  
-  Func* someFunc = new Func(hostname, argTypes0, N_ELEMENTS(argTypes0));
-  cout << "The name of the func is " << someFunc->name << endl;
-  cout << "The size of the args is " << someFunc->arguments.size() << endl;
-  cout << "The first argument is an array " << someFunc->arguments[0]->arrSize << endl;
-  cout << "The second argument is an array " << someFunc->arguments[1]->arrSize << endl;
-
-  cout << "Let's compare the two args " << someArg1->equals(someArg2) << endl;
-
-  Func* otherFunc = new Func(derp, argTypes1, N_ELEMENTS(argTypes1));
-  cout << "Let's compare functions now " << someFunc->equals(otherFunc) << endl;
-
-  // printf("argTypes 0 - %d \n argTypes 1 - %d\n", argTypes[0], argTypes[1]);
-  // int head[2];
-  // head[0] = 0;
-  // head[1] = RPC_TERMINATE;
-  // int len = sizeof(head);
-
-  // printf("The size of head is %d\n", len); 
-
-
-  // // GOOD CODE
-  int sockfd, sockIncomingFd;
-  sockfd = BinderServer::getInstance()->startServer();
-
-
-  sockIncomingFd = wait_for_conn(sockfd);
-
-  // int a = 4;
-  // int b = 5;
-
-  // send(sockIncomingFd, &a, sizeof(a), 0);
-  // send(sockIncomingFd, &b, sizeof(b), 0);
-
-  // int* head = read_head(sockToClientfd);
-  // int len = head[0];
-  // int type = head[1];
-  // printf("Received message (head).. len=%d and type=%d\n", len, type);
-
-  BinderServer::getInstance()->read_message(sockIncomingFd);
-
-  close(sockIncomingFd);
-  close(sockfd);
-
+     pthread_create(&threadid[i++], NULL, &threadworker, (void *) sockIncomingFd);
+     sleep(0); // Giving threads some CPU time
+  }
 
   return 0;
 

@@ -17,12 +17,12 @@ extern int setup_server(char port[]);
 
 extern int wait_for_conn(int sockfd); 
 
+extern int send_terminate(int sockfd); // sent by client to binder and binder to server
+
 // messages sent by client
 extern int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes); //to binder
 
 extern int send_execute(int sockfd, char hostname[], unsigned short port, int argTypes[], int sizeOfArgTypes, void** args, int sizeOfArgs); //to server
-
-extern int send_terminate(int sockfd); // to binder
 
 // messages sent by binder
 extern int send_register_success(int sockfd, int warningFlag); // to server

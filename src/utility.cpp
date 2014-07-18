@@ -8,9 +8,17 @@
 
 using namespace std;
 
-ServerPortCombo::ServerPortCombo(char* n, unsigned int p) {
+ServerPortCombo::ServerPortCombo(char* n, unsigned short p) {
   name.assign(n);
   port = p;
+}
+
+ServerPortCombo::ServerPortCombo(char* n, unsigned short p, int s) {
+  cout << "ServerPortCombo(1,2,3)" << endl;
+  name.assign(n);
+  port = p;
+  sockfd = s;
+  cout << "ServerPortCombo(1,2,3) " << name << " " << port << " " << sockfd << endl;
 }
 
 ServerPortCombo::~ServerPortCombo() {
@@ -18,12 +26,14 @@ ServerPortCombo::~ServerPortCombo() {
 }
 
 int ServerPortCombo::equals(ServerPortCombo* other) {
+  cout << "s:p equality :: " << endl;
   if (name.compare(other->name) != 0) {
     return -1;
   } 
   if (port != other->port) {
     return -1;
   }
+  cout << "s:p equality :: " << " server/port MATCH! " << endl;
   return 0; // if you made it here, then they're both equal
 }
 
@@ -50,6 +60,7 @@ Arg::~Arg() {
 }
 
 int Arg::equals(Arg* other) {
+  cout << "Arg::equals :: " << endl;
   if (input != other->input) {
     return -1;
   } else if (output != other->output) {
@@ -67,21 +78,18 @@ int Arg::equals(Arg* other) {
       } 
     } else {
       if (arrSize > other->arrSize) {
+        cout << "Arg::equals :: " << " and we have a MATCH" <<endl;
         return 2; // some kind of warning saying that the client array is greater than the max the server would like to allocate
       } 
     }
   }
+  cout << "Arg::equals :: " << " and we have a MATCH" <<endl;
   return 0; // if you made it this far, you are okay
 }
 
-// static Arg* Arg::parseArg(int* arg) {
-//   return new Arg((*arg & INPUT_MASK) >> ARG_INPUT, 
-//                  (*arg & OUTPUT_MASK) >> ARG_OUTPUT, 
-//                  (*arg & TYPE_MASK) >> 16,
-//                  (*arg & ARRAY_MASK));
-// }
 
 Func::Func(char* funcName, int argTypes[], int sizeOfArgTypes) {
+  cout << "Func() :: " << funcName << " and size of input args " << sizeOfArgTypes << endl; 
   name.assign(funcName);
   arguments.reserve(sizeOfArgTypes - 1);
 
@@ -90,6 +98,7 @@ Func::Func(char* funcName, int argTypes[], int sizeOfArgTypes) {
     arguments.push_back(new Arg(iterator));
     iterator++; 
   }
+  cout << "Func() :: " << "Total args for this func is: " << arguments.size() << endl;
 }
 
 Func::~Func() {
@@ -101,24 +110,37 @@ Func::~Func() {
 }
 
 int Func::equals(Func* other) {
+  cout << "Func::equals :: " << endl;
   int warningFlag = 0;
   if (name.compare(other->name) != 0) {
     return -1;
   } 
+
   if (arguments.size() != other->arguments.size()) {
     return -1;
   } else {
+    
     for (int i = 0; i < arguments.size(); i++) {
+      cout << "Func::equals :: " << "Checking argument number: " << i << endl;
+      
       if (arguments[i]->equals(other->arguments[i]) < 0) { // one of the arguments don't match 
+        cout << "Func::equals :: " << "arg:" << i << " did not match" << endl;
         return -1;
-      } else if (arguments[i]->equals(other->arguments[i]) > 0) {
+      } else if (arguments[i]->equals(other->arguments[i]) >= 0) {
         warningFlag = arguments[i]->equals(other->arguments[i]); // generated warning flag
       }
     }
-    if (warningFlag != 0) {
-      return warningFlag; // all the arguments and func names match, but client is requesting larger array than server wants to allocate
-    }
   }
-  return 0;
+  cout << "Func::equals :: " << " and we have a MATCH <<<<>>>>>" <<endl;
+  return warningFlag;
+}
+
+// create a custom mask on the 32 bit integer
+int mask(int start, int finish) {
+  int res = 0; 
+  for (int i = start; i < finish; i++) { 
+    res = res | (1 << i); 
+  } 
+  return res;
 }
 

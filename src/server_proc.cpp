@@ -26,7 +26,6 @@ class ServerProcess {
 
   protected:
     ServerProcess() {
-
       //connect to the binder NOTE binder needs to be running
       BINDER_ADDRESS = getenv("BINDER_ADDRESS");
       BINDER_PORT = getenv("BINDER_PORT");
@@ -53,8 +52,8 @@ class ServerProcess {
     
     int startServer();
 
-    int registerWithBinder(char* name, int* argTypes) {
-      int res = send_register(sockBinderFd, SERVER_ADDRESS, SERVER_PORT, name, argTypes, N_ELEMENTS(argTypes));
+    int registerWithBinder(char* name, int* argTypes, int sizeOfArgTypes) {
+      int res = send_register(sockBinderFd, SERVER_ADDRESS, SERVER_PORT, name, argTypes, sizeOfArgTypes);
       return res;
     } 
 
@@ -109,7 +108,10 @@ class ServerProcess {
       return 0;
     }
 
-    int terminate(); // TODO terminate server after verifying msg from binder
+    int terminate() {
+      printf("Server terminate\n");
+      return 0;
+    }
 
     int invalid_message() {
       printf("Invalid message\n");
@@ -140,7 +142,7 @@ int rpcInit() {
 }
 
 int rpcRegister(char* name, int* argTypes, skeleton f) {
-  ServerProcess::getInstance()->registerWithBinder(name, argTypes); 
+  int resp = ServerProcess::getInstance()->registerWithBinder(name, argTypes, N_ELEMENTS(argTypes)); 
   //TODO check response and see if the registration failed
   
 
@@ -162,6 +164,8 @@ int main() {
   ServerProcess::getInstance()->startServer();
   //int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
 
+  int binderSockFd = ServerProcess::getInstance()->getBinderSockFd();
+
   char herp[64] = "herp";
   int argTypes0[5];
   argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
@@ -179,7 +183,18 @@ int main() {
   argTypes1[4] = 0;
 
   //send_register(ServerProcess::getInstance()->getBinderSockFd(), SERVER_ADDRESS, SERVER_PORT, herp, argTypes, N_ELEMENTS(argTypes));
-  ServerProcess::getInstance()->registerWithBinder(herp, argTypes0);
+  ServerProcess::getInstance()->registerWithBinder(herp, argTypes0, N_ELEMENTS(argTypes0));
+
+  ServerProcess::getInstance()->read_message(binderSockFd);
+
+  ServerProcess::getInstance()->registerWithBinder(derp, argTypes1, N_ELEMENTS(argTypes0));
+
+  ServerProcess::getInstance()->read_message(binderSockFd);
+
+  ServerProcess::getInstance()->registerWithBinder(derp, argTypes1, N_ELEMENTS(argTypes0));
+
+  ServerProcess::getInstance()->read_message(binderSockFd);
+
   return 0;
 }
 

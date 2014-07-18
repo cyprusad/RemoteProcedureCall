@@ -11,12 +11,11 @@
 #include <netdb.h>
 
 #include "message_protocol.h"
+#include "response_codes.h"
 
 #define MAXHOSTNAME 1023
 #define PORTNUM 0
 #define BACKLOG 10     // how many pending connections queue will hold
-
-void fireman(void);
 
 void sigchld_handler(int s)
 {
@@ -173,24 +172,6 @@ int setup_server(char port[]) {
 
   printf("server: waiting for connections...\n");
 
-  // // If the binder made the call, then print the address and port info
-  // char addr_str[INET6_ADDRSTRLEN];
-  // struct sockaddr_in srv;
-  // int addrlen = sizeof(srv);
-  // if(binder_caller == 1) {    
-  //   if (getsockname(sockfd, (struct sockaddr *)&srv, &addrlen) < 0) { 
-  //     printf("getsockname error\n" );
-  //   } else {
-  //     char alternate[1024];
-  //     inet_ntop(srv.sin_family, get_in_addr((struct sockaddr *) &srv.sin_addr), addr_str, sizeof(addr_str));
-  //     if (gethostname(alternate, 1024) == 0) {
-  //       printf("BINDER_ADDRESS %s\n", alternate);
-  //     }
-      
-  //     printf("BINDER_PORT    %hu\n", htons(srv.sin_port));
-  //   }
-  // }
-
   return sockfd;
 
 }
@@ -231,40 +212,6 @@ int wait_for_conn(int sockfd) {
     return sockToClientfd;
 }
 
-// // client
-// int call_socket(char *hostname, unsigned short portnum)
-// { struct sockaddr_in serv_addr;
-//   struct hostent     *server;
-//   int s;
-
-//   if ((server= gethostbyname(hostname)) == NULL) { /* do we know the host's */
-//     errno= ECONNREFUSED;                       /* address? */
-//     printf("Couldn't connect - hostname not found\n");
-//     return(-1);                                /* no */
-//   }
-
-//   memset(&serv_addr,0,sizeof(struct sockaddr_in));
-//   memcpy((char *)&serv_addr.sin_addr,server->h_addr,server->h_length); /* set address */
-
-//   serv_addr.sin_family= AF_INET;
-//   serv_addr.sin_port= htons((u_short)portnum);
-
-//   if ((s= socket(AF_INET,SOCK_STREAM,0)) < 0) {  /* get socket */
-//     printf("Couldn't connect - socket not created\n");
-//     return(-1);
-//   }
-
-//   printf("The client is using the socket %d\n", s);
-//   printf("The addr is %s\n", server->h_name);
-
-//   socklen_t len = sizeof(struct sockaddr_in);
-//   if (connect(s,&serv_addr,&len) < 0) {                  /* connect */
-//     printf("Couldn't connect - connection failed\n");
-//     close(s);
-//     return(-1);
-//   }
-//   return(s);
-// }
 
 int call_sock(char hostname[], char port[]) {
     int sockfd;
@@ -350,6 +297,7 @@ int* read_head(int sockfd) {
 
 //blocking send calls (block till full message is sent)
 int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes) {
+  printf("send_loc_request :: ");
   int len = (sizeof(char)*64) + sizeOfArgTypes*4; //funcName is is considered const size (max 64)
   printf("SEND:\nSending total of %d bytes\n", len);
   int head[2];
@@ -370,6 +318,7 @@ int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgT
 }
 
 int send_terminate(int sockfd) {
+  printf("send_terminate :: \n");
   int head[2];
   head[0] = 0;
   head[1] = RPC_TERMINATE;
@@ -379,6 +328,7 @@ int send_terminate(int sockfd) {
 }
 
 int send_execute_failure(int sockfd, int reasonCode) {
+  printf("send_execute_failure :: \n");
   int exec_failure[3];
   exec_failure[0] = sizeof(int); //reasonCode is an int so 4 bytes
   exec_failure[1] = RPC_EXECUTE_FAILURE;
@@ -389,6 +339,7 @@ int send_execute_failure(int sockfd, int reasonCode) {
 }
 
 int send_loc_success(int sockfd, char hostname[], unsigned short port) {
+  printf("send_loc_success :: \n");
   int head[2];
   head[0] = (sizeof(char)*128) + sizeof(unsigned short);
   head[1] = RPC_LOC_SUCCESS;
@@ -401,21 +352,23 @@ int send_loc_success(int sockfd, char hostname[], unsigned short port) {
 
   bytesSent = send(sockfd, &port, sizeof(unsigned short), 0);
 
-  return 0;
+  return BS_SUCC_SEND_CLIENT;
 
 }
 
 int send_loc_failure(int sockfd, int reasonCode) {
+  printf("send_loc_failure :: \n");
   int loc_failure[3];
   loc_failure[0] = sizeof(int); //reasonCode is an int so 4 bytes
   loc_failure[1] = RPC_LOC_FAILURE;
   loc_failure[2] = reasonCode;
 
   int bytesSent = send(sockfd, loc_failure, sizeof(loc_failure), 0);
-  return 0;
+  return BS_SUCC_SEND_CLIENT;
 }
 
 int send_register(int sockfd, char server_identifier[], unsigned short port, char funcName[], int argTypes[], int sizeOfArgTypes) {
+  printf("send_register :: \n");
   int len = sizeof(char)*128 + sizeof(unsigned short)*2 + sizeof(char)*64 + sizeOfArgTypes*4;
 
   printf("SEND:\nSending total of %d bytes\n", len);
@@ -442,78 +395,26 @@ int send_register(int sockfd, char server_identifier[], unsigned short port, cha
 }
 
 int send_register_success(int sockfd, int warningFlag) {
+  printf("send_register_success :: \n");
   int reg_success[3];
   reg_success[0] = sizeof(int); //warningFlag is an int so 4 bytes
   reg_success[1] = RPC_REGISTER_SUCCESS;
   reg_success[2] = warningFlag;
 
   int bytesSent = send(sockfd, reg_success, sizeof(reg_success), 0);
+
+  // if the send happened successfully then BS_SUCC_SEND_SERVER   
+  return BS_SUCC_SEND_SERVER;
 }
 
 int send_register_failure(int sockfd, int reasonCode) {
+  printf("send_register_failure :: \n");
   int reg_failure[3];
   reg_failure[0] = sizeof(int); //reasonCode is an int so 4 bytes
   reg_failure[1] = RPC_REGISTER_FAILURE;
   reg_failure[2] = reasonCode;
 
   int bytesSent = send(sockfd, reg_failure, sizeof(reg_failure), 0);
+
+  return BS_SUCC_SEND_SERVER;
 }
-
-// int write_data(int s, char *buf, int n) {
-//   int bcount = 0;
-//   int br = 0;
-//   while (bcount < n) {
-//     if ((br = write(s, buf, n - bcount)) > 0) {
-//       bcount += br;
-//       buf += br;
-//     } else if (br < 0) {
-//       return -1;
-//     }
-//   }
-//   return(bcount);
-// }
-
-// int main() {
-//   int s, t;
-
-//   if ((s= establish(PORTNUM, 0)) < 0) {  /* plug in the phone */
-//     perror("establish");
-//     exit(1);
-//   }
-
-//   signal(SIGCHLD, fireman);           /* this eliminates zombies */
-
-//   for (;;) {                          /* loop for phone calls */
-//     if ((t= get_connection(s)) < 0) { /* get a connection */
-//       if (errno == EINTR)             /* EINTR might happen on accept(), */
-//         continue;                     /* try again */
-//       perror("accept");               /* bad */
-//       exit(1);
-//     }
-//     switch(fork()) {                  /* try to handle connection */
-//     case -1 :                         /* bad news.  scream and die */
-//       perror("fork");
-//       close(s);
-//       close(t);
-//       exit(1);
-//     case 0 :                          /* we're the child, do something */
-//       close(s);
-//       //work(t);
-//       exit(0);
-//     default :                         /* we're the parent so look for */
-//       close(t);                       /* another connection */
-//       continue;
-//     }
-//   } 
-
-//   return 0;
-// }
-
-/* as children die we should get catch their returns or else we get
- * zombies, A Bad Thing.  fireman() catches falling children.
- */
-// void fireman(void)
-// {
-//   while (waitpid(-1, NULL, WNOHANG) > 0)
-//     ;
-// }
