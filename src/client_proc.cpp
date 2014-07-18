@@ -11,14 +11,126 @@
 #include <iostream>
 #include <string>
 #include <vector>
+ // #include <sys/types.h>
+ // #include <sys/wait.h>
+ // #include <sys/unistd.h>
+ // #include <unistd.h>
+ // #include <netinet/in.h>
+ // #include <arpa/inet.h>
+ // #include <netdb.h>
 
 #include "rpc.h"
 #include "sck_stream.h"
 #include "message_protocol.h"
-#include "utility.h"
+#include "utility.hpp"
 #include "response_codes.h"
 
 using namespace std;
+
+// // get sockaddr, IPv4 or IPv6:
+// void *get_in_addr(struct sockaddr *sa)
+// {
+//     if (sa->sa_family == AF_INET) {
+//         return &(((struct sockaddr_in*)sa)->sin_addr);
+//     }
+
+//     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+// }
+
+// int call_sock(char hostname[], char port[]) {
+//     int sockfd;
+//     struct addrinfo hints, *servinfo, *p;
+//     int rv;
+//     char s[INET6_ADDRSTRLEN];
+
+//     memset(&hints, 0, sizeof hints);
+//     hints.ai_family = AF_UNSPEC;
+//     hints.ai_socktype = SOCK_STREAM;
+
+//     if ((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
+//         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+//         return 1;
+//     }
+
+//     // loop through all the results and connect to the first we can
+//     for(p = servinfo; p != NULL; p = p->ai_next) {
+//         if ((sockfd = socket(p->ai_family, p->ai_socktype,
+//                 p->ai_protocol)) == -1) {
+//             perror("client: socket");
+//             continue;
+//         }
+
+//         if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+//             perror("client: connect");
+//             continue;
+//         }
+//         close(sockfd);
+
+//         break;
+//     }
+
+//     if (p == NULL) {
+//         fprintf(stderr, "client: failed to connect\n");
+//         return 2;
+//     }
+
+//     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
+//             s, sizeof s);
+//     printf("client: connecting to %s\n", s);
+
+//     freeaddrinfo(servinfo); // all done with this structure
+
+//     return sockfd;
+// }
+
+// // blocking - read head
+// int* read_head(int sockfd) {
+//   int head[2];
+//   int nbytes;
+
+//   nbytes = recv(sockfd, head, sizeof(head), 0);
+//   // printf("read %d bytes\n", nbytes);
+//   // printf("read len: %d \nread type: %d \n", head[0], head[1]);
+
+//   return head;
+// }
+
+
+// //blocking send calls (block till full message is sent)
+// int send_loc_request(int sockfd, char funcName[], int argTypes[], int sizeOfArgTypes) {
+//   printf("send_loc_request :: ");
+//   int len = (sizeof(char)*64) + sizeOfArgTypes*4; //funcName is is considered const size (max 64)
+//   printf("SEND:\nSending total of %d bytes\n", len);
+//   int head[2];
+//   head[0] = len;
+//   head[1] = RPC_LOC_REQUEST;
+
+//   printf("The funcname is: %s\nThe argType array len is: %d\n", funcName, sizeOfArgTypes);
+
+//   int bytesSent;
+
+//   bytesSent = send(sockfd, head, sizeof(head), 0);
+
+//   bytesSent = send(sockfd, funcName, (sizeof(char)*64), 0);
+
+//   bytesSent = send(sockfd, argTypes, sizeOfArgTypes*4, 0);
+
+//   return 0;
+// }
+
+// int send_terminate(int sockfd) {
+//   printf("send_terminate :: \n");
+//   int head[2];
+//   head[0] = 0;
+//   head[1] = RPC_TERMINATE;
+
+//   int bytesSent = send(sockfd, head, sizeof(head), 0);
+//   return 0; //error checking required
+// }
+
+// int send_execute(int binderSockFd, char* hostname, unsigned short port, int* argTypes, int sizeOfArgTypes, void** args, int sizeOfArgs) {
+//   cout << "send_execute" << endl;
+// }
 
 class ClientProcess {
   private:
@@ -126,8 +238,8 @@ class ClientProcess {
       return 0;
     }
 
-    int execute(char * name, int * argTypes, void ** args) {
-      int sizeOfArgs = 0;
+    int execute(char* name, int* argTypes, int sizeOfArgTypes, void ** args, int sizeOfArgs) {
+      //int sizeOfArgs = 0;
       char hostname[128];
       unsigned short port;
 
@@ -167,9 +279,9 @@ int rpcCall(char* name, int* argTypes, void** args) {
   //TODO if the resp was that the location lookup was unsuccessful, then return now
 
 
-  //resp = ClientProcess::getInstance()->execute(char * name, int * argTypes, void ** args); // fire the message to server that was located
+  resp = ClientProcess::getInstance()->execute(name, argTypes,N_ELEMENTS(argTypes), args, 0); // fire the message to server that was located
 
-  //resp = ClientProcess::getInstance()->read_message(binderSockFd);
+  resp = ClientProcess::getInstance()->read_message(binderSockFd);
 
   //TODO if the execution was successful then return 0;
   return 0;
@@ -180,26 +292,4 @@ int rpcTerminate() {
   int res = ClientProcess::getInstance()->terminate();
   return res;
 }
-
-// int main() {
-//   int binderSockFd = ClientProcess::getInstance()->getBinderSockFd();
- 
-//   char name[64] = "derp";
-//   int argTypes1[5];
-//   argTypes1[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16); 
-//   argTypes1[1] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16) | 23;
-//   argTypes1[2] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_INT << 16);
-//   argTypes1[3] = (1 << ARG_INPUT)  | (1 << ARG_OUTPUT) | (ARG_LONG << 16) | 23;
-//   argTypes1[4] = 0;
-
-//   int resp = ClientProcess::getInstance()->locationRequest(name, argTypes1, N_ELEMENTS(argTypes1)); // fire the message to binder
-
-//   resp = ClientProcess::getInstance()->read_message(binderSockFd); // read either loc_success / failure
-
-//   //printf("The size of func: %d\n and size of argTypes: %d\n", N_ELEMENTS(func), N_ELEMENTS(argTypes));
-//   //rpcCall()
-
-//   //close(ClientProcess::getInstance()->getBinderSockFd()); // TODO I don't think we ever close conn to binder -- perhaps in binder
-//   return 0;
-// }
 

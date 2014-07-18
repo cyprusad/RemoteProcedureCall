@@ -2,6 +2,8 @@
 extern "C" {
 #endif
 
+#include <string>
+#include <vector>
 #define NTHREADS 100
 
 // always unique

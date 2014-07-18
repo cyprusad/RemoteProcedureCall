@@ -11,9 +11,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <iostream>
 
 #include "message_protocol.h"
 #include "response_codes.h"
+#include "sck_stream.h"
+
+using namespace std;
 
 #define MAXHOSTNAME 1023
 #define PORTNUM 0
@@ -34,82 +38,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// // args: if binder calls this func => binderCaller = 1 else 0
-// int establish(unsigned short portnum, int binder_caller) {
-//   char myname[MAXHOSTNAME + 1];
-//   myname[MAXHOSTNAME] = '\0';
-//   int s;
-//   struct sockaddr_in sa;
-//   struct hostent *hp;
 
-//   memset(&sa, 0, sizeof(struct sockaddr_in)); // clear our addr
-//   gethostname(myname, MAXHOSTNAME); // who are we?
-  
-//   hp = gethostbyname(myname); 
-
-
-//   //debug
-//   // printf("The host name is %s \n", myname);
-//   // printf("The h_name is %s \n", hp->h_name);
-//   // char hostname[1024];
-//   // strncpy(hostname, hp->h_name, 1024);
-//   // struct hostent *lh;
-//   // lh= gethostbyname(hostname);
-//   // printf("The h_name of this guys is %s\n", lh->h_name);
-//   //end-debug
-
-
-//   if (hp == NULL) {
-//     return (-1);
-//   }
-//   sa.sin_family = AF_INET; // our host address
-
-//   sa.sin_port = htons(portnum); // our port number
-
-//   //printf("The addr type is %d\n", hp->h_addrtype);
-
-
-//   if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) { // create socket
-//     return (-1);
-//   }
-
-//   if (bind(s, &sa, sizeof(struct sockaddr_in)) < 0) { //bind address to socket
-//     close(s);
-//     return (-1);
-//   }
-
-//   listen(s, 5); //max # of queued connections
-
-//   // If the binder made the call, then print the address and port info
-//   if(binder_caller == 1) {
-//     socklen_t len = sizeof(sa);
-//     if (getsockname(s, &sa, &len) < 0) { 
-//       printf("getsockname error\n" );
-//     } else {
-//       printf("BINDER_ADDRESS %s\n", hp->h_name);
-//       printf("BINDER_PORT    %hu\n", sa.sin_port);
-//     }
-//   }
-//   return s;
-// }
-
-// int get_connection(int s) {
-//   int t;
-//   struct sockaddr_in cli_addr;
-//   socklen_t clilen;
-
-//   printf("Trying to connect to something... \n");
-
-//   clilen = sizeof(cli_addr);
-
-//   if ((t = accept(s, (struct sockaddr *) &cli_addr, &clilen)) < 0) { //accept connection if there is one
-//     printf("Not accepting bro.\n");
-//     return (-1);
-//   }
-
-//   printf("Accepted connection bro : %d\n", t);
-//   return t;
-// }
 
 int setup_server(char port[]) {
   int sockfd;  // listen on sock_fd, new connection on new_fd
@@ -328,6 +257,12 @@ int send_terminate(int sockfd) {
   int bytesSent = send(sockfd, head, sizeof(head), 0);
   return 0; //error checking required
 }
+
+int send_execute(int binderSockFd, char* hostname, unsigned short port, int* argTypes, int sizeOfArgTypes, void** args, int sizeOfArgs) {
+  cout << "send_execute" << endl;
+}
+
+int send_execute_success();
 
 int send_execute_failure(int sockfd, int reasonCode) {
   printf("send_execute_failure :: \n");
