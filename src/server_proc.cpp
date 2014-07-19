@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <pthread.h>
+#include <stdint.h>
 
 #include "rpc.h"
 #include "sck_stream.h"
@@ -15,10 +16,14 @@
 
 using namespace std;
 
+pthread_t s_threadid[NTHREADS]; // Thread pool
+pthread_mutex_t s_lck;
+int isTerminate = 0; // set to 1 when terminate is called
+
 class ServerDatabase {
   public:
     vector<Func*> functions;
-    vector<skeleton> skeletons;
+    vector<int (*)(int *, void **)> skeletons;
 
     ServerDatabase() {
       cout << "ServerDatabase :: " << "server db ctr" << endl;
@@ -59,9 +64,23 @@ class ServerDatabase {
       return -1; // if we made it this far then we didn't find the function
     }
 
-    int addToDB(Func* func, skeleton);
+    int addToDB(Func* func, skeleton f) {
+      int index = findRegisteredFunction(func);
+      if (index < 0) {
+        functions.push_back(func);
+        skeletons.push_back(f);
+      } else {
+        delete func; // free the func pointer created
+        skeletons[index] = f; // replace the skeleton
+      }
+      return 0;
+    }
 
-
+    // Assume that when a client asksl skeleton is always there
+    skeleton getSkeletonForFunc(Func* func) {
+      int index = findRegisteredFunction(func);
+      return skeletons[index];
+    }
 };
 
 class ServerProcess {
@@ -86,10 +105,16 @@ class ServerProcess {
       BINDER_PORT = getenv("BINDER_PORT");
       sockBinderFd = call_sock(BINDER_ADDRESS, BINDER_PORT);
 
+      db = new ServerDatabase();
+      stillRegistering = 1;
     } 
   
   public: 
+    ServerDatabase* db;
     //singleton accessor
+
+    int stillRegistering;
+
     static ServerProcess* getInstance() {
       if (singleton == 0) {
         singleton = new ServerProcess();
@@ -104,18 +129,23 @@ class ServerProcess {
     int getBinderSockFd() {
       return sockBinderFd;
     }
-    
+
+    ServerDatabase* getDB(){
+      return db;
+    }
     int startServer();
 
     int registerWithBinder(char* name, int* argTypes, int sizeOfArgTypes) {
       int res = send_register(sockBinderFd, SERVER_ADDRESS, SERVER_PORT, name, argTypes, sizeOfArgTypes);
-      return res;
+      
+      res = read_message(sockBinderFd); //register success or fail
     } 
 
     int read_message(int sockfd) {
       int* head = read_head(sockfd); //TODO check if we need to clean this
       int len = head[0];
       int type = head[1];
+      int readResp;
 
       switch(type) {
         case RPC_TERMINATE:
@@ -123,18 +153,20 @@ class ServerProcess {
           terminate();
           break;
         case RPC_REGISTER_SUCCESS:
-          read_reg_succ(sockfd);
+          readResp = read_reg_succ(sockfd);
           break;
         case RPC_REGISTER_FAILURE:
-          read_reg_fail(sockfd);
+          readResp = read_reg_fail(sockfd);
           break;
         case RPC_EXECUTE:
-          read_execute(sockfd, len);
+          readResp = read_execute(sockfd, len);
           break;
         default:
           // invalid message type -- raise error of some sort
-          invalid_message();
+          readResp = INVALID_MESSAGE;
       }
+
+      return 0;
     }
 
     int read_reg_succ(int sockfd) {
@@ -193,43 +225,77 @@ int ServerProcess::startServer() {
 
 //STATUS: Done
 int rpcInit() { 
+  cout << "rpcInit :: " << endl; 
   ServerProcess::getInstance()->startServer();
 }
 
 int rpcRegister(char* name, int* argTypes, skeleton f) {
+  Func* toAdd;
   int resp = ServerProcess::getInstance()->registerWithBinder(name, argTypes, N_ELEMENTS(argTypes)); 
   //TODO check response and see if the registration failed
   
-
   //store skeleton in local DB
-
+  toAdd = new Func(name, argTypes, N_ELEMENTS(argTypes));
+  resp = ServerProcess::getInstance()->getDB()->addToDB(toAdd, f);
   return 0;
 }
 
-int rpcExecute() {
-  //TODO - some kind of infinite accept loop; 
-  //TODO - receive and process requests from client; 
-  //TODO - multithreaded?
-  int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
+void *serverWorker(void* arg)
+{
+  printf("TID:0x%x has been spawned\n", pthread_self());
 
+  intptr_t sockfd = (intptr_t)arg; 
+
+  cout << "threadworker :: " << "The sock passed to me is " << sockfd << endl;
+
+  //TODO The resp should uniquely tell if the read message was register/location and what happened 
+  int resp = ServerProcess::getInstance()->read_message(sockfd); // Blocks until there is something to be read in the socket
+
+   // if we are here, it means that this was a client socket.. so close it
+  printf("TID:0x%x is done processing or client hung up\n", pthread_self());
+  close(sockfd);
+  pthread_exit(0);
 }
 
-// // This main is basically like what will be executed when rpcExecute is called
-// int main() {
-//   ServerProcess::getInstance()->startServer();
-//   //int c = wait_for_conn(ServerProcess::getInstance()->getServerSockFd());
+int rpcExecute() {
+  int sockSelfFd, sockIncomingFd;
+  int terminate;
 
-//   int binderSockFd = ServerProcess::getInstance()->getBinderSockFd();
+  // This will initialize the singleton server and database and we are still in single thread mode
+  sockSelfFd = ServerProcess::getInstance()->getServerSockFd();
 
-//   int count0 = 3;
-//   int argTypes0[count0 + 1];
-//   argTypes0[0] = (1 << ARG_OUTPUT) | (ARG_INT << 16);
-//   argTypes0[1] = (1 << ARG_INPUT) | (ARG_INT << 16);
-//   argTypes0[2] = (1 << ARG_INPUT) | (ARG_INT << 16);
-//   argTypes0[3] = 0;
- 
-//   // rpcRegister("f0", argTypes0, *f0_Skel);
+  pthread_attr_t attr; // Thread attribute
+  int i; // Thread iterator
 
-//   return 0;
-// }
+  pthread_attr_init(&attr); // Creating thread attributes
+  pthread_attr_setschedpolicy(&attr, SCHED_FIFO); // FIFO scheduling for threads 
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); // Don't want threads (particualrly main)
+  
+                                                                
+  i = 0;
+  while (1) {
+     if (i == NTHREADS) // So that we don't access a thread out of bounds of the thread pool
+     {
+       i = 0;
+     }
+
+     sockIncomingFd = wait_for_conn(sockSelfFd);
+
+     cout << "main thread :: " << "The sock accepted is " << sockIncomingFd << endl;
+
+     pthread_mutex_lock (&s_lck);
+     terminate = isTerminate;
+     pthread_mutex_unlock (&s_lck);
+
+     if (terminate != 0) {
+      break;
+     }
+
+     pthread_create(&s_threadid[i++], &attr, &serverWorker, (void *) sockIncomingFd);
+     sleep(0); // Giving threads some CPU time
+  }
+
+  return 0;
+
+}
 

@@ -1,10 +1,16 @@
+#include <iostream>
+
 #include "rpc.h"
 #include "server_function_skels.h"
 
+
+using namespace std;
 int main(int argc, char *argv[]) {
   
   /* create sockets and connect to the binder */
   rpcInit();
+
+  cout << "  V   " << sizeof(void*) << endl;
 
   /* prepare server functions' signatures */
   int count0 = 3;

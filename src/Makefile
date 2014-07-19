@@ -28,4 +28,5 @@ clean:
 	rm -f *.o
 	rm -f *.a
 	rm -f binder
+	rm -f server
 	rm -f *.gch
